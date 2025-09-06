@@ -2,68 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* DocFlow Design System - Modern Document Management
-All colors MUST be HSL. Based on #446BF5 primary blue and clean grays.
+/* DocFlow Design System - Gestão de Documentos Jurídicos
+Paleta: #3B82F6 (azul principal), cinzas suaves, design minimalista
 */
 
 @layer base {
   :root {
-    /* Main backgrounds */
+    /* Backgrounds principais */
     --background: 0 0% 98%;
-    --foreground: 220 15% 15%;
+    --foreground: 215 15% 15%;
 
-    /* Card system */
+    /* Sistema de cards */
     --card: 0 0% 100%;
-    --card-foreground: 220 15% 15%;
+    --card-foreground: 215 15% 15%;
 
-    /* Popover system */
+    /* Sistema de popovers */
     --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 15%;
+    --popover-foreground: 215 15% 15%;
 
-    /* Primary DocFlow Blue #446BF5 */
-    --primary: 228 89% 63%;
+    /* Azul principal #3B82F6 */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-light: 228 89% 75%;
-    --primary-dark: 228 89% 50%;
+    --primary-light: 217 91% 70%;
+    --primary-dark: 217 91% 50%;
 
-    /* Secondary grays */
-    --secondary: 220 15% 96%;
-    --secondary-foreground: 220 15% 25%;
+    /* Cinzas secundários */
+    --secondary: 215 15% 96%;
+    --secondary-foreground: 215 15% 25%;
 
-    /* Muted tones */
-    --muted: 220 15% 95%;
-    --muted-foreground: 220 10% 55%;
+    /* Tons neutros */
+    --muted: 215 15% 95%;
+    --muted-foreground: 215 10% 55%;
 
-    /* Accent variations */
-    --accent: 220 15% 94%;
-    --accent-foreground: 220 15% 25%;
+    /* Accent suave */
+    --accent: 215 15% 94%;
+    --accent-foreground: 215 15% 25%;
 
-    /* Status colors */
+    /* Estados de cor */
     --destructive: 0 85% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
 
-    /* Interface elements */
-    --border: 220 15% 90%;
-    --input: 220 15% 96%;
-    --ring: 228 89% 63%;
+    /* Elementos de interface */
+    --border: 215 15% 88%;
+    --input: 215 15% 96%;
+    --ring: 217 91% 60%;
 
     /* Design tokens */
-    --radius: 0.75rem;
+    --radius: 1rem;
     
-    /* Custom gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(228 89% 63%) 0%, hsl(228 89% 75%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 15% 98%) 100%);
+    /* Gradientes */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 91% 70%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(215 15% 98%) 100%);
     
-    /* Shadows */
-    --shadow-soft: 0 2px 8px -2px hsl(220 15% 0% / 0.1);
-    --shadow-medium: 0 8px 25px -5px hsl(220 15% 0% / 0.1);
-    --shadow-strong: 0 25px 50px -12px hsl(220 15% 0% / 0.15);
+    /* Sombras */
+    --shadow-sm: 0 1px 2px 0 hsl(215 15% 0% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(215 15% 0% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(215 15% 0% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(215 15% 0% / 0.1);
     
-    /* Transitions */
+    /* Transições */
     --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -85,35 +88,35 @@ All colors MUST be HSL. Based on #446BF5 primary blue and clean grays.
   }
 
   .dark {
-    /* Dark theme backgrounds */
-    --background: 220 25% 8%;
-    --foreground: 220 15% 95%;
+    /* Dark backgrounds */
+    --background: 215 25% 6%;
+    --foreground: 215 15% 95%;
 
-    /* Dark card system */
-    --card: 220 25% 10%;
-    --card-foreground: 220 15% 95%;
+    /* Dark cards */
+    --card: 215 25% 8%;
+    --card-foreground: 215 15% 95%;
 
-    /* Dark popover system */
-    --popover: 220 25% 10%;
-    --popover-foreground: 220 15% 95%;
+    /* Dark popovers */
+    --popover: 215 25% 8%;
+    --popover-foreground: 215 15% 95%;
 
-    /* Primary remains vibrant in dark */
-    --primary: 228 89% 63%;
+    /* Primary mantém vibrant no dark */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-light: 228 89% 75%;
-    --primary-dark: 228 89% 50%;
+    --primary-light: 217 91% 70%;
+    --primary-dark: 217 91% 50%;
 
     /* Dark secondary */
-    --secondary: 220 25% 15%;
-    --secondary-foreground: 220 15% 85%;
+    --secondary: 215 25% 12%;
+    --secondary-foreground: 215 15% 85%;
 
     /* Dark muted */
-    --muted: 220 25% 12%;
-    --muted-foreground: 220 10% 65%;
+    --muted: 215 25% 10%;
+    --muted-foreground: 215 10% 65%;
 
     /* Dark accent */
-    --accent: 220 25% 15%;
-    --accent-foreground: 220 15% 85%;
+    --accent: 215 25% 12%;
+    --accent-foreground: 215 15% 85%;
 
     /* Dark status colors */
     --destructive: 0 85% 55%;
@@ -122,20 +125,23 @@ All colors MUST be HSL. Based on #446BF5 primary blue and clean grays.
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 55%;
     --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
 
     /* Dark interface */
-    --border: 220 25% 18%;
-    --input: 220 25% 15%;
-    --ring: 228 89% 63%;
+    --border: 215 25% 15%;
+    --input: 215 25% 12%;
+    --ring: 217 91% 60%;
     
     /* Dark gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(228 89% 63%) 0%, hsl(228 89% 75%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(220 25% 10%) 0%, hsl(220 25% 8%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 91% 70%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(215 25% 8%) 0%, hsl(215 25% 6%) 100%);
     
     /* Dark shadows */
-    --shadow-soft: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-medium: 0 8px 25px -5px hsl(0 0% 0% / 0.4);
-    --shadow-strong: 0 25px 50px -12px hsl(0 0% 0% / 0.5);
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5);
+    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.6);
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
