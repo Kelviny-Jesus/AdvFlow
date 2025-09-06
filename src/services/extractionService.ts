@@ -41,6 +41,9 @@ class ExtractionService {
         timestamp: new Date().toISOString()
       };
 
+      console.log('📤 Enviando para n8n webhook:', this.WEBHOOK_URL);
+      console.log('📋 Payload:', JSON.stringify(payload, null, 2));
+
       // Fazer requisição para o webhook
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT);
@@ -60,7 +63,7 @@ class ExtractionService {
       if (!response.ok) {
         throw new AppError(
           `Webhook retornou status ${response.status}: ${response.statusText}`,
-          'EXTRACTION_ERROR'
+          500
         );
       }
 
@@ -68,6 +71,10 @@ class ExtractionService {
       const extractedData = await response.text();
 
       const duration = Date.now() - startTime;
+      
+      console.log('✅ Resposta do n8n recebida!');
+      console.log('📊 Tamanho da resposta:', extractedData.length, 'caracteres');
+      console.log('⏱️ Tempo de processamento:', duration, 'ms');
       
       logger.info('Extração concluída com sucesso', {
         documentId: request.documentId,
@@ -81,18 +88,17 @@ class ExtractionService {
       const duration = Date.now() - startTime;
       
       if (error instanceof Error && error.name === 'AbortError') {
-        logger.error('Timeout na extração de dados', {
+        logger.error('Timeout na extração de dados', new Error('Timeout na extração de dados'), {
           documentId: request.documentId,
           duration,
           timeout: this.TIMEOUT
         });
-        throw new AppError('Timeout na extração de dados', 'EXTRACTION_TIMEOUT');
+        throw new AppError('Timeout na extração de dados', 408);
       }
 
-      logger.error('Erro na extração de dados', {
+      logger.error('Erro na extração de dados', new Error(error instanceof Error ? error.message : 'Erro desconhecido'), {
         documentId: request.documentId,
         duration,
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
         stack: error instanceof Error ? error.stack : undefined
       });
 
@@ -119,6 +125,7 @@ class ExtractionService {
    */
   isSupportedMimeType(mimeType: string): boolean {
     const supportedTypes = [
+      // Documentos
       'application/pdf',
       'text/plain',
       'text/html',
@@ -126,12 +133,39 @@ class ExtractionService {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      
+      // Imagens
       'image/jpeg',
       'image/png',
-      'image/tiff'
+      'image/tiff',
+      'image/gif',
+      'image/bmp',
+      'image/webp',
+      
+      // Áudio
+      'audio/mpeg',        // MP3
+      'audio/mp3',         // MP3 (alternativo)
+      'audio/wav',         // WAV
+      'audio/ogg',         // OGG
+      'audio/m4a',         // M4A
+      'audio/aac',         // AAC
+      'audio/flac',        // FLAC
+      'audio/webm',        // WebM Audio
+      
+      // Vídeo
+      'video/mp4',         // MP4
+      'video/avi',         // AVI
+      'video/mov',         // MOV
+      'video/wmv',         // WMV
+      'video/webm',        // WebM Video
+      'video/quicktime'    // QuickTime
     ];
 
-    return supportedTypes.includes(mimeType.toLowerCase());
+    const isSupported = supportedTypes.includes(mimeType.toLowerCase());
+    
+    console.log('🔍 Verificando tipo de arquivo:', mimeType, '| Suportado:', isSupported);
+    
+    return isSupported;
   }
 
   /**

@@ -27,7 +27,9 @@ import {
   Home,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Sparkles,
+  Wand2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -117,11 +119,24 @@ const Folders = () => {
     });
   };
 
-  // Componente para indicador de status de extração
+  // Componente para indicador de status de extração e renomeação
   const ExtractionStatus = ({ document }: { document: any }) => {
-    const status = document.extractionStatus || 'pending';
+    const extractionStatus = document.extractionStatus || 'pending';
+    const hasExtractedData = !!document.extractedData;
+    const isAIRenamed = document.name && document.name.startsWith('DOC n.');
     
-    switch (status) {
+    // Se tem dados extraídos e foi renomeado pela IA
+    if (hasExtractedData && isAIRenamed) {
+      return (
+        <div className="flex items-center gap-1 text-purple-600">
+          <Sparkles className="w-3 h-3" />
+          <span className="text-xs">Renomeado por IA</span>
+        </div>
+      );
+    }
+    
+    // Status de extração
+    switch (extractionStatus) {
       case 'completed':
         return (
           <div className="flex items-center gap-1 text-green-600">

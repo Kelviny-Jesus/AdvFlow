@@ -145,7 +145,7 @@ export const UpdateDocumentSchema = z.object({
   folderId: UuidSchema.optional().or(z.literal('')),
 });
 
-// Schema para Petição
+// Schema para Fatos
 export const PetitionSchema = z.object({
   id: UuidSchema.optional(),
   title: z.string()

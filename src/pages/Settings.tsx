@@ -121,7 +121,7 @@ const Settings = () => {
                   </Card>
                 </motion.div>
 
-                {/* Templates de Petição */}
+                {/* Templates de Fatos */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -131,7 +131,7 @@ const Settings = () => {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Wand2 className="w-5 h-5 text-primary" />
-                        Template de Petição
+                        Template de Fatos
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">

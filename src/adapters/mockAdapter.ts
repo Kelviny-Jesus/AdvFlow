@@ -493,7 +493,7 @@ class MockPetitionAdapter implements PetitionAdapter {
     await networkDelay();
     const index = this.mockPetitions.findIndex(p => p.id === id);
     if (index === -1) {
-      throw new Error('Petição não encontrada');
+      throw new Error('Fatos não encontrada');
     }
     
     this.mockPetitions[index] = {
@@ -511,7 +511,7 @@ class MockPetitionAdapter implements PetitionAdapter {
     await networkDelay();
     const index = this.mockPetitions.findIndex(p => p.id === id);
     if (index === -1) {
-      throw new Error('Petição não encontrada');
+      throw new Error('Fatos não encontrada');
     }
     
     this.mockPetitions.splice(index, 1);

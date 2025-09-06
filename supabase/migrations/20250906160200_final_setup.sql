@@ -46,7 +46,7 @@ VALUES
   ('00000000-0000-0000-0000-000000000000', '(?i)\.(mp4|avi|mov|wmv)$', 'video', 10, true),
   ('00000000-0000-0000-0000-000000000000', '(?i)\.(zip|rar|7z)$', 'zip', 10, true),
   ('00000000-0000-0000-0000-000000000000', '(?i)contrato', 'pdf', 20, true),
-  ('00000000-0000-0000-0000-000000000000', '(?i)petição|peticao', 'docx', 20, true),
+  ('00000000-0000-0000-0000-000000000000', '(?i)Fatos|peticao', 'docx', 20, true),
   ('00000000-0000-0000-0000-000000000000', '(?i)protocolo', 'pdf', 15, true),
   ('00000000-0000-0000-0000-000000000000', '(?i)certidão|certidao', 'pdf', 15, true)
 ON CONFLICT DO NOTHING;
@@ -66,7 +66,7 @@ AS $$
       'dateFormat', 'dd/MM/yyyy'
     ),
     'petition', jsonb_build_object(
-      'template', E'# PETIÇÃO INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX',
+      'template', E'# Fatos INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX',
       'factCategories', ARRAY['contratual', 'processual', 'probatório', 'comunicação'],
       'autoExtractFacts', true
     ),
@@ -116,7 +116,7 @@ BEGIN
     false,
     true,
     'dd/MM/yyyy',
-    E'# PETIÇÃO INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX',
+    E'# Fatos INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX',
     ARRAY['contratual', 'processual', 'probatório', 'comunicação'],
     true,
     true,

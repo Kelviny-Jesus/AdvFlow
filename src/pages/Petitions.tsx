@@ -29,13 +29,16 @@ import {
   FolderOpen,
   Plus,
   CheckCircle2,
-  Folder
+  Folder,
+  Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { FileItem, Case, Fact } from "@/types";
-import { mockFiles, mockFolders, mockCases, mockFacts } from "@/data/mocks";
 import { getFileIcon } from "@/utils/fileUtils";
 import { toast } from "@/hooks/use-toast";
+import { useFactsData } from "@/hooks/useFactsData";
+import { factsAIService } from "@/services/factsAIService";
+import { PetitionService } from "@/services/petitionService";
 
 const Petitions = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -43,23 +46,22 @@ const Petitions = () => {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [petitionContent, setPetitionContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [facts, setFacts] = useState<Fact[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const clientFolders = mockFolders.filter(f => f.kind === 'client');
-  const availableSubfolders = selectedFolderId 
-    ? mockFolders.filter(f => f.parentId === selectedFolderId)
-    : [];
-  const selectedFolder = mockFolders.find(f => f.id === selectedFolderId);
-  const cases: Case[] = selectedFolder 
-    ? mockCases.filter(c => c.clientId === selectedFolder.clientId)
-    : [];
+  // Usar dados reais do Supabase
+  const {
+    clientFolders,
+    availableSubfolders,
+    selectedFolder,
+    documents,
+    cases,
+    isLoading
+  } = useFactsData(selectedFolderId);
 
+  // Filtrar documentos por caso se selecionado
   const files: FileItem[] = selectedCase && selectedCase !== 'all'
-    ? mockFiles.filter(f => f.caseId === selectedCase)
-    : selectedFolderId
-    ? mockFiles.filter(f => f.appProperties?.folderId === selectedFolderId)
-    : [];
+    ? (documents as FileItem[]).filter(f => f.caseId === selectedCase)
+    : (documents as FileItem[]);
 
   const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -83,75 +85,55 @@ const Petitions = () => {
       return;
     }
 
+    if (!factsAIService.isConfigured()) {
+      toast({
+        title: "IA não configurada",
+        description: "Chave da OpenAI não configurada. Verifique as configurações.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('🤖 Iniciando geração de fatos...');
+      console.log('📁 Pasta selecionada:', selectedFolder?.name);
+      console.log('📄 Documentos selecionados:', selectedFiles.length);
+
+      // Preparar dados dos documentos selecionados
+      const selectedDocuments = files.filter(f => selectedFiles.includes(f.id));
       
-      const generatedFacts = mockFacts.filter(f => 
-        f.documentRefs?.some(ref => selectedFiles.includes(ref))
-      );
+      // Buscar caso selecionado
+      const selectedCaseData = cases.find(c => c.id === selectedCase);
       
-      setFacts(generatedFacts);
-      
-      const folder = clientFolders.find(f => f.id === selectedFolderId);
-      const case_ = cases.find(c => c.id === selectedCase);
-      
-      const generatedContent = `# PETIÇÃO INICIAL - ${folder?.name.toUpperCase()}
+      // Gerar fatos usando IA
+      const generatedFacts = await factsAIService.generateFacts({
+        clientId: selectedFolder?.clientId || '',
+        clientName: selectedFolder?.name || '',
+        caseReference: selectedCaseData?.reference,
+        documentIds: selectedFiles,
+        documents: selectedDocuments.map(doc => ({
+          id: doc.id,
+          name: doc.name,
+          docNumber: doc.docNumber,
+          extractedData: doc.extractedData,
+          type: doc.type,
+          createdAt: doc.createdAt
+        }))
+      });
 
-**Referência do Caso:** ${case_?.reference || 'A ser preenchida'}
-**Data:** ${new Date().toLocaleDateString('pt-BR')}
-
-## I. QUALIFICAÇÃO DAS PARTES
-
-**REQUERENTE:** ${folder?.name}
-**REQUERIDO:** (A ser preenchido)
-
-## II. DOS FATOS
-
-${generatedFacts.map((fact, index) => 
-  `${index + 1}. ${fact.text} (Ref: ${fact.documentRefs?.map(ref => {
-    const file = files.find(f => f.id === ref);
-    return file?.docNumber || 'DOC';
-  }).join(', ')})`
-).join('\n\n')}
-
-## III. DOCUMENTOS ANEXOS
-
-${selectedFiles.map((fileId, index) => {
-  const file = files.find(f => f.id === fileId);
-  return `${file?.docNumber || `DOC n. ${String(index + 1).padStart(3, '0')}`} - ${file?.name}`;
-}).join('\n')}
-
-## IV. DO DIREITO
-
-(Fundamentação jurídica a ser desenvolvida)
-
-## V. DOS PEDIDOS
-
-Diante do exposto, requer-se:
-
-a) (Pedido principal)
-b) (Pedidos subsidiários)
-
-Termos em que pede deferimento.
-
-Local, ${new Date().toLocaleDateString('pt-BR')}.
-
-_____________________
-Advogado(a)
-OAB/XX nº XXXXX`;
-
-      setPetitionContent(generatedContent);
+      setPetitionContent(generatedFacts);
       
       toast({
-        title: "Petição gerada com sucesso!",
-        description: `${generatedFacts.length} fatos extraídos automaticamente.`,
+        title: "Fatos gerados com sucesso!",
+        description: `Relatório de fatos gerado com base em ${selectedFiles.length} documentos.`,
       });
     } catch (error) {
+      console.error('Erro na geração de fatos:', error);
       toast({
         title: "Erro na geração",
-        description: "Não foi possível gerar a petição.",
+        description: error instanceof Error ? error.message : "Não foi possível gerar os fatos.",
         variant: "destructive",
       });
     } finally {
@@ -159,23 +141,80 @@ OAB/XX nº XXXXX`;
     }
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Minuta salva",
-      description: "A petição foi salva nos rascunhos.",
-    });
+  const handleSave = async () => {
+    if (!petitionContent || !selectedFolderId) {
+      toast({
+        title: "Nada para salvar",
+        description: "Gere os fatos primeiro antes de salvar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const selectedCaseData = cases.find(c => c.id === selectedCase);
+      
+      await PetitionService.createPetition({
+        title: `Fatos - ${selectedFolder?.name} - ${new Date().toLocaleDateString('pt-BR')}`,
+        clientId: selectedFolder?.clientId || '',
+        caseId: selectedCaseData?.id || '',
+        content: petitionContent,
+        documentIds: selectedFiles,
+        status: 'draft'
+      });
+
+      toast({
+        title: "Fatos salvos com sucesso!",
+        description: "Os fatos foram salvos nos rascunhos.",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar fatos:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar os fatos.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleExport = (format: 'docx' | 'pdf') => {
-    toast({
-      title: `Exportando para ${format.toUpperCase()}`,
-      description: "O download será iniciado em instantes.",
-    });
-  };
+  const handleExport = async (format: 'docx' | 'pdf') => {
+    if (!petitionContent) {
+      toast({
+        title: "Nada para exportar",
+        description: "Gere os fatos primeiro antes de exportar.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const insertFact = (fact: Fact) => {
-    const insertion = `\n\n${fact.text} (Ref: DOC n. xxx)\n`;
-    setPetitionContent(prev => prev + insertion);
+    try {
+      // Criar um blob com o conteúdo
+      const blob = new Blob([petitionContent], { 
+        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      
+      // Criar link de download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Fatos_${selectedFolder?.name}_${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: `Exportado para ${format.toUpperCase()}`,
+        description: "O download foi iniciado.",
+      });
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      toast({
+        title: "Erro na exportação",
+        description: "Não foi possível exportar o arquivo.",
+        variant: "destructive",
+      });
+    }
   };
 
   const resetCaseSelection = () => {
@@ -303,16 +342,34 @@ OAB/XX nº XXXXX`;
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <label className="text-sm font-medium">Arquivos ({selectedFiles.length} selecionados)</label>
-                              {selectedFiles.length > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedFiles([])}
-                                  className="text-xs"
-                                >
-                                  Limpar
-                                </Button>
-                              )}
+                              <div className="flex gap-2">
+                                {filteredFiles.length > 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      if (selectedFiles.length === filteredFiles.length) {
+                                        setSelectedFiles([]);
+                                      } else {
+                                        setSelectedFiles(filteredFiles.map(f => f.id));
+                                      }
+                                    }}
+                                    className="text-xs"
+                                  >
+                                    {selectedFiles.length === filteredFiles.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                                  </Button>
+                                )}
+                                {selectedFiles.length > 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedFiles([])}
+                                    className="text-xs"
+                                  >
+                                    Limpar
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <ScrollArea className="h-64">
                               <div className="space-y-2">
@@ -332,7 +389,7 @@ OAB/XX nº XXXXX`;
                                       <span className="text-sm">{getFileIcon(file.type)}</span>
                                       <div className="min-w-0">
                                         <p className="text-xs font-medium truncate">
-                                          {file.docNumber || file.name}
+                                          {file.name}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                           {file.type.toUpperCase()}
@@ -371,7 +428,7 @@ OAB/XX nº XXXXX`;
                         <div className="flex items-center justify-between">
                           <CardTitle className="flex items-center gap-2 text-lg">
                             <FileText className="w-5 h-5 text-primary" />
-                            Editor de Petição
+                            Editor de Fatos
                           </CardTitle>
                           <div className="flex gap-2">
                             <Button
@@ -409,7 +466,7 @@ OAB/XX nº XXXXX`;
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
                         <Textarea
-                          placeholder="O conteúdo da petição aparecerá aqui após a geração..."
+                          placeholder="O conteúdo dos fatos aparecerá aqui após a geração..."
                           value={petitionContent}
                           onChange={(e) => setPetitionContent(e.target.value)}
                           className="flex-1 min-h-0 font-mono text-sm rounded-2xl"
@@ -447,68 +504,49 @@ OAB/XX nº XXXXX`;
                           ) : (
                             <>
                               <Wand2 className="w-4 h-4 mr-2" />
-                              Gerar Petição
+                              Gerar Fatos
                             </>
                           )}
                         </Button>
 
                         <Separator />
 
-                        {/* Fatos Extraídos */}
+                        {/* Status da Geração */}
                         <div className="space-y-3">
                           <h4 className="font-medium flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-success" />
-                            Fatos Extraídos ({facts.length})
+                            Status da Geração
                           </h4>
                           
-                          {facts.length === 0 ? (
+                          {isLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Carregando dados...
+                            </div>
+                          ) : !selectedFolderId ? (
                             <p className="text-sm text-muted-foreground">
-                              Selecione uma pasta e documentos, depois gere a petição para ver os fatos extraídos.
+                              Selecione uma pasta/cliente para começar.
+                            </p>
+                          ) : selectedFiles.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              Selecione pelo menos um documento para gerar os fatos.
+                            </p>
+                          ) : !factsAIService.isConfigured() ? (
+                            <p className="text-sm text-muted-foreground">
+                              ⚠️ IA não configurada. Verifique a chave da OpenAI.
                             </p>
                           ) : (
-                            <ScrollArea className="h-64">
-                              <div className="space-y-3">
-                                {facts.map(fact => (
-                                  <motion.div
-                                    key={fact.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="p-3 bg-muted/30 rounded-2xl space-y-2"
-                                  >
-                                    <div className="flex items-start justify-between">
-                                      <Badge variant="outline" className="text-xs capitalize">
-                                        {fact.type}
-                                      </Badge>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => insertFact(fact)}
-                                        className="h-6 px-2 text-xs rounded-xl"
-                                      >
-                                        <Plus className="w-3 h-3 mr-1" />
-                                        Inserir
-                                      </Button>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                      {fact.text}
-                                    </p>
-                                    {fact.confidence && (
-                                      <div className="flex items-center gap-2">
-                                        <div className="flex-1 bg-muted rounded-full h-1">
-                                          <div 
-                                            className="bg-primary h-1 rounded-full" 
-                                            style={{ width: `${fact.confidence * 100}%` }}
-                                          />
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                          {Math.round(fact.confidence * 100)}%
-                                        </span>
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                ))}
-                              </div>
-                            </ScrollArea>
+                            <div className="space-y-2">
+                              <p className="text-sm text-muted-foreground">
+                                ✅ Pronto para gerar fatos
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {selectedFiles.length} documento(s) selecionado(s)
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {files.filter(f => f.extractedData).length} com dados extraídos
+                              </p>
+                            </div>
                           )}
                         </div>
                       </CardContent>

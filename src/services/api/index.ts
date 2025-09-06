@@ -162,11 +162,11 @@ class ApiService {
     documentIds: string[];
     template?: string;
   }): Promise<ApiResponse<{ content: string; facts: Fact[] }>> {
-    // Mock geração de petição
+    // Mock geração de Fatos
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const { data: facts } = await getMockData.facts(params.documentIds);
-    const content = `# Petição Gerada
+    const content = `# Fatos Gerada
 
 ## Fatos Relevantes
 ${facts.map(f => `- ${f.text}`).join('\n')}
@@ -193,7 +193,7 @@ ${params.documentIds.map((id, index) => `DOC n. ${String(index + 1).padStart(3, 
     };
     
     toast({
-      title: "Petição salva",
+      title: "Fatos salva",
       description: "Minuta salva com sucesso.",
     });
     

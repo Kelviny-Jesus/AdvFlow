@@ -119,18 +119,18 @@ const nextNumber = await DocumentService.getNextDocNumber("client-id");
 ```typescript
 import { PetitionService } from "@/services/petitionService";
 
-// Criar petição
+// Criar Fatos
 const petition = await PetitionService.createPetition({
-  title: "Petição Inicial - Processo Trabalhista",
+  title: "Fatos Inicial - Processo Trabalhista",
   clientId: "client-id",
   caseId: "case-id",
-  content: "# PETIÇÃO INICIAL...",
+  content: "# Fatos INICIAL...",
   documentIds: ["doc1", "doc2"],
   template: "template-id",
   status: "draft"
 });
 
-// Adicionar fato à petição
+// Adicionar fato à Fatos
 const fact = await PetitionService.addFactToPetition("petition-id", {
   type: "contratual",
   text: "O contrato foi assinado em 15/01/2024...",
@@ -138,7 +138,7 @@ const fact = await PetitionService.addFactToPetition("petition-id", {
   confidence: 0.95
 });
 
-// Exportar petição
+// Exportar Fatos
 const blob = await PetitionService.exportPetition("petition-id", "pdf");
 ```
 
@@ -159,7 +159,7 @@ const updated = await SettingsService.updateUserSettings({
     dateFormat: "dd/MM/yyyy"
   },
   petition: {
-    template: "# PETIÇÃO INICIAL\n\n{content}",
+    template: "# Fatos INICIAL\n\n{content}",
     factCategories: ["contratual", "processual", "probatório"],
     autoExtractFacts: true
   }

@@ -45,7 +45,7 @@ export class SettingsService {
       use_underscores: false,
       seq_reset_per_client: true,
       date_format: "dd/MM/yyyy",
-      petition_template: `# PETIÇÃO INICIAL
+      petition_template: `# Fatos INICIAL
 
 **REQUERENTE:** {client}
 **REQUERIDO:** (A ser preenchido)

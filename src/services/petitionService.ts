@@ -10,7 +10,7 @@ type FactInsert = Database["public"]["Tables"]["facts"]["Insert"];
 
 export class PetitionService {
   /**
-   * Criar nova petição
+   * Criar nova Fatos
    */
   static async createPetition(petitionData: {
     title: string;
@@ -24,7 +24,7 @@ export class PetitionService {
     const { data: user } = await supabase.auth.getUser();
     if (!user?.user?.id) throw new Error("Usuário não autenticado");
 
-    // Criar petição
+    // Criar Fatos
     const insertData: PetitionInsert = {
       title: petitionData.title,
       client_id: petitionData.clientId,
@@ -43,7 +43,7 @@ export class PetitionService {
 
     if (petitionError) throw petitionError;
 
-    // Associar documentos à petição
+    // Associar documentos à Fatos
     if (petitionData.documentIds.length > 0) {
       const documentAssociations = petitionData.documentIds.map(docId => ({
         petition_id: petition.id,
@@ -102,7 +102,7 @@ export class PetitionService {
   }
 
   /**
-   * Buscar petição por ID
+   * Buscar Fatos por ID
    */
   static async getPetitionById(id: string): Promise<Petition | null> {
     const { data: user } = await supabase.auth.getUser();
@@ -133,7 +133,7 @@ export class PetitionService {
   }
 
   /**
-   * Atualizar petição
+   * Atualizar Fatos
    */
   static async updatePetition(
     id: string,
@@ -178,7 +178,7 @@ export class PetitionService {
   }
 
   /**
-   * Deletar petição
+   * Deletar Fatos
    */
   static async deletePetition(id: string): Promise<void> {
     const { data: user } = await supabase.auth.getUser();
@@ -194,7 +194,7 @@ export class PetitionService {
   }
 
   /**
-   * Adicionar fato à petição
+   * Adicionar fato à Fatos
    */
   static async addFactToPetition(petitionId: string, factData: {
     type: "contratual" | "processual" | "probatório" | "comunicação";
@@ -241,7 +241,7 @@ export class PetitionService {
   }
 
   /**
-   * Buscar fatos de uma petição
+   * Buscar fatos de uma Fatos
    */
   static async getPetitionFacts(petitionId: string): Promise<Fact[]> {
     const { data, error } = await supabase
@@ -264,11 +264,11 @@ export class PetitionService {
   }
 
   /**
-   * Exportar petição para formato específico
+   * Exportar Fatos para formato específico
    */
   static async exportPetition(petitionId: string, format: "docx" | "pdf"): Promise<Blob> {
     const petition = await this.getPetitionById(petitionId);
-    if (!petition) throw new Error("Petição não encontrada");
+    if (!petition) throw new Error("Fatos não encontrada");
 
     // TODO: Implementar conversão real para DOCX/PDF
     // Por enquanto, retorna um blob de texto

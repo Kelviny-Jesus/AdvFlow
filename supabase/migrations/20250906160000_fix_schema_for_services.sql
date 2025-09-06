@@ -261,7 +261,7 @@ BEGIN
   VALUES (
     auth.uid(),
     'DOC n. {seq} - {client} - {date}',
-    E'# PETIÇÃO INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX'
+    E'# Fatos INICIAL\n\n**REQUERENTE:** {client}\n**REQUERIDO:** (A ser preenchido)\n\n## I. DOS FATOS\n\n{facts}\n\n## II. DOS DOCUMENTOS\n\n{documents}\n\n## III. DO DIREITO\n\n(Fundamentação jurídica)\n\n## IV. DOS PEDIDOS\n\nRequer-se:\n\na) (Pedido principal)\nb) (Pedidos subsidiários)\n\nLocal, {date}.\n\n_____________________\nAdvogado(a)\nOAB/XX nº XXXXX'
   )
   ON CONFLICT (user_id) DO NOTHING;
   
