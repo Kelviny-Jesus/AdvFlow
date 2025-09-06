@@ -1,4 +1,155 @@
-import { Client, Case, FileItem, Settings, Fact } from "@/types";
+import { Client, Case, FileItem, FolderItem, Settings, Fact } from "@/types";
+
+export const mockFolders: FolderItem[] = [
+  // Pastas de clientes (raiz)
+  {
+    id: "folder-silva-joao",
+    name: "João Silva",
+    kind: "client",
+    itemsCount: 8,
+    documentsCount: 6,
+    subfolderCount: 2,
+    createdAt: "2024-01-15T10:00:00Z",
+    clientId: "silva-joao",
+    path: "João Silva"
+  },
+  {
+    id: "folder-santos-maria",
+    name: "Maria Santos", 
+    kind: "client",
+    itemsCount: 3,
+    documentsCount: 1,
+    subfolderCount: 2,
+    createdAt: "2024-02-10T14:30:00Z",
+    clientId: "santos-maria",
+    path: "Maria Santos"
+  },
+  {
+    id: "folder-acme-sa",
+    name: "ACME S.A.",
+    kind: "client", 
+    itemsCount: 7,
+    documentsCount: 2,
+    subfolderCount: 5,
+    createdAt: "2024-01-20T09:15:00Z",
+    clientId: "acme-sa",
+    path: "ACME S.A."
+  },
+  
+  // Subpastas do João Silva
+  {
+    id: "subfolder-silva-trabalhista",
+    name: "Processo Trabalhista",
+    parentId: "folder-silva-joao",
+    kind: "case",
+    itemsCount: 4,
+    documentsCount: 4,
+    subfolderCount: 0,
+    createdAt: "2024-01-15T10:30:00Z",
+    clientId: "silva-joao",
+    path: "João Silva/Processo Trabalhista"
+  },
+  {
+    id: "subfolder-silva-divorcio", 
+    name: "Divórcio Consensual",
+    parentId: "folder-silva-joao",
+    kind: "case",
+    itemsCount: 2,
+    documentsCount: 2,
+    subfolderCount: 0,
+    createdAt: "2024-02-01T11:00:00Z",
+    clientId: "silva-joao",
+    path: "João Silva/Divórcio Consensual"
+  },
+  
+  // Subpastas da Maria Santos
+  {
+    id: "subfolder-santos-inventario",
+    name: "Inventário",
+    parentId: "folder-santos-maria",
+    kind: "case",
+    itemsCount: 1,
+    documentsCount: 1,
+    subfolderCount: 0,
+    createdAt: "2024-02-10T15:00:00Z",
+    clientId: "santos-maria",
+    path: "Maria Santos/Inventário"
+  },
+  {
+    id: "subfolder-santos-contratos",
+    name: "Contratos",
+    parentId: "folder-santos-maria", 
+    kind: "subfolder",
+    itemsCount: 0,
+    documentsCount: 0,
+    subfolderCount: 0,
+    createdAt: "2024-02-15T10:00:00Z",
+    clientId: "santos-maria",
+    path: "Maria Santos/Contratos"
+  },
+  
+  // Subpastas da ACME S.A.
+  {
+    id: "subfolder-acme-tributario",
+    name: "Questões Tributárias",
+    parentId: "folder-acme-sa",
+    kind: "case",
+    itemsCount: 1,
+    documentsCount: 1,
+    subfolderCount: 0,
+    createdAt: "2024-01-20T16:20:00Z",
+    clientId: "acme-sa",
+    path: "ACME S.A./Questões Tributárias"
+  },
+  {
+    id: "subfolder-acme-trabalhista",
+    name: "Ações Trabalhistas",
+    parentId: "folder-acme-sa",
+    kind: "case", 
+    itemsCount: 1,
+    documentsCount: 1,
+    subfolderCount: 0,
+    createdAt: "2024-03-01T08:45:00Z",
+    clientId: "acme-sa",
+    path: "ACME S.A./Ações Trabalhistas"
+  },
+  {
+    id: "subfolder-acme-contratos",
+    name: "Contratos",
+    parentId: "folder-acme-sa",
+    kind: "subfolder",
+    itemsCount: 0, 
+    documentsCount: 0,
+    subfolderCount: 0,
+    createdAt: "2024-01-22T14:00:00Z",
+    clientId: "acme-sa",
+    path: "ACME S.A./Contratos"
+  },
+  {
+    id: "subfolder-acme-fiscal",
+    name: "Documentos Fiscais",
+    parentId: "folder-acme-sa",
+    kind: "subfolder",
+    itemsCount: 0,
+    documentsCount: 0,
+    subfolderCount: 0,
+    createdAt: "2024-01-25T09:30:00Z", 
+    clientId: "acme-sa",
+    path: "ACME S.A./Documentos Fiscais"
+  },
+  {
+    id: "subfolder-acme-rh",
+    name: "Recursos Humanos",
+    parentId: "folder-acme-sa",
+    kind: "subfolder",
+    itemsCount: 0,
+    documentsCount: 0,
+    subfolderCount: 0,
+    createdAt: "2024-02-01T16:45:00Z",
+    clientId: "acme-sa",
+    path: "ACME S.A./Recursos Humanos"
+  }
+];
 
 export const mockClients: Client[] = [
   {
@@ -98,6 +249,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "CONTRATO_TRABALHO",
       processingDate: "2024-01-15",
+      folderId: "subfolder-silva-trabalhista"
     },
   },
   {
@@ -117,6 +269,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "HOLERITE",
       processingDate: "2024-01-16",
+      folderId: "subfolder-silva-trabalhista"
     },
   },
   {
@@ -137,6 +290,7 @@ export const mockFiles: FileItem[] = [
       documentType: "AUDIO_REUNIAO",
       processingDate: "2024-01-20",
       duration: "00:23:45",
+      folderId: "subfolder-silva-trabalhista"
     },
   },
   {
@@ -156,6 +310,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "LAUDO_MEDICO", 
       processingDate: "2024-01-25",
+      folderId: "subfolder-silva-trabalhista"
     },
   },
   {
@@ -175,6 +330,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "CERTIDAO_CASAMENTO",
       processingDate: "2024-02-01",
+      folderId: "subfolder-silva-divorcio"
     },
   },
   {
@@ -194,6 +350,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "INVENTARIO_BENS",
       processingDate: "2024-02-05",
+      folderId: "subfolder-silva-divorcio"
     },
   },
   {
@@ -213,6 +370,7 @@ export const mockFiles: FileItem[] = [
     appProperties: {
       documentType: "CERTIDAO_OBITO",
       processingDate: "2024-02-10",
+      folderId: "subfolder-santos-inventario"
     },
   },
   {
@@ -233,6 +391,7 @@ export const mockFiles: FileItem[] = [
       documentType: "AUTO_INFRACAO",
       processingDate: "2024-01-20",
       valor: "250000.00",
+      folderId: "subfolder-acme-tributario"
     },
   },
 ];
@@ -346,15 +505,22 @@ export const mockFacts: Fact[] = [
 // Função para buscar dados mock 
 export const getMockData = {
   clients: () => Promise.resolve({ data: mockClients }),
+  folders: (parentId?: string) => {
+    const filtered = parentId 
+      ? mockFolders.filter(f => f.parentId === parentId)
+      : mockFolders.filter(f => !f.parentId); // Pastas raiz
+    return Promise.resolve({ data: filtered });
+  },
   cases: (clientId?: string) => {
     const filtered = clientId 
       ? mockCases.filter(c => c.clientId === clientId)
       : mockCases;
     return Promise.resolve({ data: filtered });
   },
-  files: (clientId?: string, caseId?: string) => {
+  files: (folderId?: string, clientId?: string, caseId?: string) => {
     let filtered = mockFiles;
-    if (clientId) filtered = filtered.filter(f => f.clientId === clientId);
+    if (folderId) filtered = filtered.filter(f => f.appProperties?.folderId === folderId);
+    else if (clientId) filtered = filtered.filter(f => f.clientId === clientId);
     if (caseId) filtered = filtered.filter(f => f.caseId === caseId);
     return Promise.resolve({ data: filtered });
   },

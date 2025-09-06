@@ -42,9 +42,21 @@ export interface FolderItem {
   id: string;
   name: string;
   parentId?: string;
-  kind: 'client' | 'case' | 'generic';
+  kind: 'client' | 'case' | 'subfolder';
   itemsCount: number;
+  documentsCount: number;
+  subfolderCount: number;
   createdAt: string;
+  clientId?: string; // Para subpastas, indica qual cliente pertencem
+  path: string; // Caminho completo da pasta (ex: "João Silva/Contratos")
+}
+
+export interface UploadDestination {
+  type: 'existing_folder' | 'new_client' | 'new_subfolder';
+  folderId?: string; // ID da pasta existente
+  clientName?: string; // Nome do novo cliente
+  subfolderName?: string; // Nome da nova subpasta
+  parentFolderId?: string; // ID da pasta pai para nova subpasta
 }
 
 export interface UploadFile {
@@ -52,8 +64,10 @@ export interface UploadFile {
   file: File;
   clientId?: string;
   caseId?: string;
+  folderId?: string; // ID da pasta de destino
   documentType?: string;
   processingDate?: Date;
+  destination?: UploadDestination;
   status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error';
   progress: number;
   error?: string;
