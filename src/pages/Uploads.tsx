@@ -34,7 +34,7 @@ const Uploads = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [folders] = useState<FolderItem[]>(mockFolders);
-  const [searchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Configurações de destino
   const [destinationType, setDestinationType] = useState<'existing_folder' | 'new_client' | 'new_subfolder'>('existing_folder');
@@ -200,8 +200,16 @@ const Uploads = () => {
 
   const completedFiles = files.filter(f => f.status === 'completed').length;
 
-  const clientFolders = folders.filter(f => f.kind === 'client');
-  const allFolders = folders.filter(f => f.kind !== 'client');
+  // Filtrar pastas baseado na busca
+  const filteredFolders = searchQuery.trim() 
+    ? folders.filter(folder => 
+        folder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        folder.path.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : folders;
+
+  const clientFolders = filteredFolders.filter(f => f.kind === 'client');
+  const allFolders = filteredFolders.filter(f => f.kind !== 'client');
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
@@ -212,7 +220,7 @@ const Uploads = () => {
           <div className="flex-1 flex flex-col">
             <Header
               searchQuery={searchQuery}
-              onSearchChange={() => {}}
+              onSearchChange={setSearchQuery}
             />
             
             <main className="flex-1 p-6">
@@ -274,11 +282,17 @@ const Uploads = () => {
                               <SelectValue placeholder="Escolha uma pasta..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {folders.map(folder => (
-                                <SelectItem key={folder.id} value={folder.id}>
-                                  {folder.path}
-                                </SelectItem>
-                              ))}
+                              {filteredFolders.length > 0 ? (
+                                filteredFolders.map(folder => (
+                                  <SelectItem key={folder.id} value={folder.id}>
+                                    {folder.path}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <div className="p-2 text-sm text-muted-foreground text-center">
+                                  Nenhuma pasta encontrada
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -305,11 +319,17 @@ const Uploads = () => {
                                 <SelectValue placeholder="Selecione a pasta pai..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {clientFolders.map(folder => (
-                                  <SelectItem key={folder.id} value={folder.id}>
-                                    {folder.name}
-                                  </SelectItem>
-                                ))}
+                                {clientFolders.length > 0 ? (
+                                  clientFolders.map(folder => (
+                                    <SelectItem key={folder.id} value={folder.id}>
+                                      {folder.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="p-2 text-sm text-muted-foreground text-center">
+                                    Nenhuma pasta de cliente encontrada
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
