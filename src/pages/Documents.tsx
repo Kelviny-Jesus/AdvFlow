@@ -120,7 +120,7 @@ const Documents = () => {
   // Filter files and folders based on search
   const filteredItems = [...folders, ...files].filter(item => {
     if (!searchQuery) return true;
-    const name = 'name' in item ? item.name : item.docNumber || item.name;
+    const name = 'kind' in item ? item.name : (item.docNumber ?? item.name);
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
