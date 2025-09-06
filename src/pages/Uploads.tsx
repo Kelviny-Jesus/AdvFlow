@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -210,6 +210,14 @@ const Uploads = () => {
 
   const clientFolders = filteredFolders.filter(f => f.kind === 'client');
   const allFolders = filteredFolders.filter(f => f.kind !== 'client');
+  
+  // Reset seleção quando busca muda e não há resultados
+  useEffect(() => {
+    if (searchQuery.trim() && filteredFolders.length === 0) {
+      setSelectedFolderId("");
+      setSelectedParentFolder("");
+    }
+  }, [searchQuery, filteredFolders.length]);
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
@@ -277,7 +285,11 @@ const Uploads = () => {
                       {destinationType === 'existing_folder' && (
                         <div className="space-y-2">
                           <Label>Selecionar pasta</Label>
-                          <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
+                          <Select 
+                            key={`folder-select-${searchQuery}`} 
+                            value={selectedFolderId} 
+                            onValueChange={setSelectedFolderId}
+                          >
                             <SelectTrigger className="rounded-2xl">
                               <SelectValue placeholder="Escolha uma pasta..." />
                             </SelectTrigger>
@@ -290,7 +302,7 @@ const Uploads = () => {
                                 ))
                               ) : (
                                 <div className="p-2 text-sm text-muted-foreground text-center">
-                                  Nenhuma pasta encontrada
+                                  {searchQuery.trim() ? "Nenhuma pasta encontrada para a busca" : "Nenhuma pasta encontrada"}
                                 </div>
                               )}
                             </SelectContent>
@@ -314,7 +326,11 @@ const Uploads = () => {
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <Label>Pasta pai</Label>
-                            <Select value={selectedParentFolder} onValueChange={setSelectedParentFolder}>
+                            <Select 
+                              key={`client-select-${searchQuery}`} 
+                              value={selectedParentFolder} 
+                              onValueChange={setSelectedParentFolder}
+                            >
                               <SelectTrigger className="rounded-2xl">
                                 <SelectValue placeholder="Selecione a pasta pai..." />
                               </SelectTrigger>
@@ -327,7 +343,7 @@ const Uploads = () => {
                                   ))
                                 ) : (
                                   <div className="p-2 text-sm text-muted-foreground text-center">
-                                    Nenhuma pasta de cliente encontrada
+                                    {searchQuery.trim() ? "Nenhuma pasta de cliente encontrada para a busca" : "Nenhuma pasta de cliente encontrada"}
                                   </div>
                                 )}
                               </SelectContent>
