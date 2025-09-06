@@ -1,73 +1,300 @@
-# Welcome to your Lovable project
+# DocFlow-AI - Sistema de Gestão de Documentos Jurídicos
 
-## Project info
+Sistema completo de gestão de documentos jurídicos com IA integrada para extração de dados, renomeação automática e geração de narrativas de fatos.
 
-**URL**: https://lovable.dev/projects/09b60267-4e91-462c-8768-893253e98c11
+## 🚀 Funcionalidades Principais
 
-## How can I edit this code?
+### 📁 Gestão de Documentos
+- **Upload inteligente** com conversão automática JPG → PDF
+- **Organização hierárquica** de pastas (Clientes, Casos, Subpastas)
+- **Visualização de documentos** integrada (PDF, imagens, áudio, vídeo)
+- **Navegação estilo Google Drive** com breadcrumbs
 
-There are several ways of editing your application.
+### 🤖 Inteligência Artificial
+- **Extração automática de dados** via n8n webhook
+- **Renomeação inteligente** com OpenAI GPT-4o-mini
+- **Numeração sequencial** automática por cliente
+- **Classificação de documentos** (RG, CPF, Contratos, etc.)
+- **Geração de narrativas de fatos** para petições
 
-**Use Lovable**
+### 🔄 Integrações
+- **Supabase** (PostgreSQL + Storage + Auth)
+- **n8n** para processamento de documentos
+- **OpenAI** para IA e renomeação
+- **Python** para conversão de imagens
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/09b60267-4e91-462c-8768-893253e98c11) and start prompting.
+## 🛠️ Tecnologias Utilizadas
 
-Changes made via Lovable will be committed automatically to this repo.
+### Frontend
+- **React 18** com TypeScript
+- **Vite** para build e desenvolvimento
+- **Tailwind CSS** para estilização
+- **Shadcn/UI** para componentes
+- **React Query** para gerenciamento de estado
+- **Framer Motion** para animações
+- **jsPDF** para conversão de imagens
 
-**Use your preferred IDE**
+### Backend
+- **Supabase** (PostgreSQL + Storage + Auth)
+- **Row Level Security (RLS)** para segurança
+- **Python 3.13** com Pillow para processamento de imagens
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### IA e Processamento
+- **OpenAI GPT-4o-mini** para renomeação e narrativas
+- **n8n** para extração de dados de documentos
+- **Webhooks** para comunicação assíncrona
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 📋 Pré-requisitos
 
-Follow these steps:
+- **Node.js 18+** e npm
+- **Python 3.13+** com pip
+- **Conta Supabase** (gratuita)
+- **Chave OpenAI API** (paga)
+- **n8n webhook** configurado
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🚀 Instalação e Configuração
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 1. Clone o Repositório
 
-# Step 3: Install the necessary dependencies.
-npm i
+```bash
+git clone <SEU_REPOSITORIO>
+cd legal-streamline
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 2. Instalar Dependências Node.js
+
+```bash
+# Instalar dependências principais
+npm install --legacy-peer-deps
+
+# Instalar dependências de desenvolvimento
+npm install @tanstack/react-query-devtools --save-dev --legacy-peer-deps
+```
+
+### 3. Configurar Variáveis de Ambiente
+
+Crie o arquivo `.env.local` na raiz do projeto:
+
+```env
+# Supabase
+VITE_SUPABASE_URL=sua_url_do_supabase
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
+
+# OpenAI
+VITE_OPENAI_API_KEY=sk-sua-chave-openai
+
+# n8n Webhook
+VITE_N8N_WEBHOOK_URL=https://primary-production-f2257.up.railway.app/webhook/entrada-documentos
+```
+
+### 4. Configurar Supabase
+
+#### 4.1 Criar Projeto no Supabase
+1. Acesse [supabase.com](https://supabase.com)
+2. Crie um novo projeto
+3. Copie a URL e chave anônima para o `.env.local`
+
+#### 4.2 Executar Migrações
+Execute os arquivos SQL na pasta `supabase/migrations/` na ordem:
+
+```sql
+-- 1. Tabelas principais
+-- 2. Relacionamentos
+-- 3. Triggers e funções
+-- 4. Políticas RLS
+-- 5. Configuração final
+```
+
+#### 4.3 Configurar Storage
+```sql
+-- Criar bucket 'documents'
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('documents', 'documents', true);
+
+-- Políticas de acesso
+CREATE POLICY "documents_public_read" ON storage.objects
+FOR SELECT USING (bucket_id = 'documents');
+
+CREATE POLICY "documents_authenticated_upload" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.role() = 'authenticated');
+```
+
+### 5. Configurar Python (Opcional)
+
+Para conversão avançada de imagens:
+
+```bash
+# Executar script de instalação
+./install-python-deps.sh
+
+# Ou instalação manual
+cd python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install Pillow
+```
+
+### 6. Iniciar Desenvolvimento
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+O sistema estará disponível em `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📖 Guia de Uso
 
-**Use GitHub Codespaces**
+### 1. Upload de Documentos
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. **Acesse a aba "Uploads"**
+2. **Selecione uma pasta** (cliente ou caso)
+3. **Arraste arquivos** ou clique para selecionar
+4. **Aguarde o processamento**:
+   - Conversão automática JPG → PDF
+   - Upload para Supabase Storage
+   - Extração de dados via n8n
+   - Renomeação automática com IA
 
-## What technologies are used for this project?
+### 2. Navegação de Pastas
 
-This project is built with:
+1. **Acesse a aba "Pastas"**
+2. **Navegue hierarquicamente**:
+   - Clientes (pastas principais)
+   - Casos (subpastas de clientes)
+   - Subpastas (organização adicional)
+3. **Visualize documentos** clicando neles
+4. **Use breadcrumbs** para navegação
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 3. Geração de Narrativas
 
-## How can I deploy this project?
+1. **Acesse a aba "Fatos"**
+2. **Selecione uma pasta** com documentos
+3. **Escolha documentos** relevantes
+4. **Clique "Gerar Narrativa"**
+5. **Revise e salve** o conteúdo gerado
 
-Simply open [Lovable](https://lovable.dev/projects/09b60267-4e91-462c-8768-893253e98c11) and click on Share -> Publish.
+## 🔧 Configurações Avançadas
 
-## Can I connect a custom domain to my Lovable project?
+### OpenAI - Modelos e Prompts
 
-Yes, you can!
+O sistema usa **GPT-4o-mini** para:
+- **Renomeação de documentos** com classificação específica
+- **Geração de narrativas** em português brasileiro
+- **Numeração sequencial** por cliente
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### n8n - Processamento de Documentos
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Configure seu webhook n8n para receber:
+```json
+{
+  "fileUrl": "https://supabase.co/storage/...",
+  "mimeType": "application/pdf",
+  "fileName": "documento.pdf",
+  "documentId": "uuid",
+  "timestamp": "2025-01-01T00:00:00Z"
+}
+```
+
+### Supabase - Políticas RLS
+
+O sistema implementa Row Level Security:
+- **Usuários** só acessam seus próprios dados
+- **Documentos** protegidos por usuário
+- **Storage** com políticas de upload/leitura
+
+## 🐛 Solução de Problemas
+
+### Erro: "Bucket not found"
+```sql
+-- Verificar se bucket existe
+SELECT * FROM storage.buckets WHERE id = 'documents';
+
+-- Recriar se necessário
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('documents', 'documents', true);
+```
+
+### Erro: "Invalid PDF structure"
+- Verifique se a conversão JPG→PDF está funcionando
+- Confirme que o arquivo está sendo enviado como PDF para o n8n
+- Verifique logs de conversão no console
+
+### Erro: "OpenAI API Key"
+- Confirme que `VITE_OPENAI_API_KEY` está no `.env.local`
+- Verifique se a chave tem créditos disponíveis
+- Teste a chave em [platform.openai.com](https://platform.openai.com)
+
+### Erro: "n8n webhook"
+- Confirme que `VITE_N8N_WEBHOOK_URL` está correto
+- Teste o webhook manualmente
+- Verifique logs de extração no console
+
+## 📁 Estrutura do Projeto
+
+```
+legal-streamline/
+├── src/
+│   ├── components/          # Componentes React
+│   ├── services/           # Serviços de negócio
+│   ├── hooks/              # React Query hooks
+│   ├── types/              # Definições TypeScript
+│   ├── utils/              # Utilitários
+│   └── pages/              # Páginas da aplicação
+├── python/                 # Scripts Python
+│   ├── converter.py        # Conversor JPG→PDF
+│   ├── requirements.txt    # Dependências Python
+│   └── .venv/             # Ambiente virtual
+├── supabase/              # Migrações e configurações
+└── public/                # Arquivos estáticos
+```
+
+## 🔄 Fluxo de Processamento
+
+1. **Upload** → Conversão JPG→PDF → Storage
+2. **Extração** → n8n webhook → Dados extraídos
+3. **Renomeação** → OpenAI → Nome inteligente
+4. **Organização** → Pastas hierárquicas
+5. **Narrativas** → IA → Conteúdo jurídico
+
+## 📊 Logs e Monitoramento
+
+O sistema gera logs detalhados:
+- **Console do navegador** para debug
+- **Terminal VS Code** para desenvolvimento
+- **Supabase logs** para produção
+- **Performance monitoring** integrado
+
+## 🚀 Deploy
+
+### Desenvolvimento
+```bash
+npm run dev
+```
+
+### Produção
+```bash
+npm run build
+npm run preview
+```
+
+### Deploy no Supabase
+1. Configure variáveis de ambiente
+2. Execute migrações
+3. Configure políticas RLS
+4. Deploy do frontend
+
+## 📝 Licença
+
+Este projeto é privado e proprietário.
+
+## 🤝 Suporte
+
+Para suporte técnico ou dúvidas:
+1. Verifique os logs do console
+2. Confirme configurações do `.env.local`
+3. Teste integrações individualmente
+4. Consulte a documentação das APIs
+
+---
+
+**DocFlow-AI** - Transformando a gestão de documentos jurídicos com IA 🚀
