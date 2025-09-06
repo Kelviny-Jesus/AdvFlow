@@ -21,8 +21,8 @@ const Search = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<string>("");
-  const [filterClient, setFilterClient] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("all");
 
   const handleViewDocument = (document: Document) => {
     setSelectedDocument(document);
@@ -50,8 +50,8 @@ const Search = () => {
       doc.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.case.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesType = !filterType || doc.type === filterType;
-    const matchesClient = !filterClient || doc.client === filterClient;
+    const matchesType = !filterType || filterType === "all" || doc.type === filterType;
+    const matchesClient = !filterClient || filterClient === "all" || doc.client === filterClient;
     
     return matchesSearch && matchesType && matchesClient;
   });
@@ -113,7 +113,7 @@ const Search = () => {
                             <SelectValue placeholder="Todos os tipos" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Todos os tipos</SelectItem>
+                            <SelectItem value="all">Todos os tipos</SelectItem>
                             {types.map(type => (
                               <SelectItem key={type} value={type}>{type.toUpperCase()}</SelectItem>
                             ))}
@@ -128,7 +128,7 @@ const Search = () => {
                             <SelectValue placeholder="Todos os clientes" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Todos os clientes</SelectItem>
+                            <SelectItem value="all">Todos os clientes</SelectItem>
                             {clients.map(client => (
                               <SelectItem key={client} value={client}>{client}</SelectItem>
                             ))}
@@ -142,8 +142,8 @@ const Search = () => {
                         variant="outline"
                         onClick={() => {
                           setSearchQuery("");
-                          setFilterType("");
-                          setFilterClient("");
+                          setFilterType("all");
+                          setFilterClient("all");
                         }}
                       >
                         Limpar Filtros
