@@ -39,7 +39,7 @@ import { toast } from "@/hooks/use-toast";
 
 const Petitions = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
-  const [selectedCase, setSelectedCase] = useState<string>("");
+  const [selectedCase, setSelectedCase] = useState<string>("all");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [petitionContent, setPetitionContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -55,7 +55,7 @@ const Petitions = () => {
     ? mockCases.filter(c => c.clientId === selectedFolder.clientId)
     : [];
 
-  const files: FileItem[] = selectedCase 
+  const files: FileItem[] = selectedCase && selectedCase !== 'all'
     ? mockFiles.filter(f => f.caseId === selectedCase)
     : selectedFolderId
     ? mockFiles.filter(f => f.appProperties?.folderId === selectedFolderId)
@@ -179,7 +179,7 @@ OAB/XX nº XXXXX`;
   };
 
   const resetCaseSelection = () => {
-    setSelectedCase("");
+    setSelectedCase("all");
     setSelectedFiles([]);
   };
 
@@ -254,7 +254,7 @@ OAB/XX nº XXXXX`;
                                 <SelectValue placeholder="Todos os documentos" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Todos os documentos</SelectItem>
+                                <SelectItem value="all">Todos os documentos</SelectItem>
                                 {cases.map(case_ => (
                                   <SelectItem key={case_.id} value={case_.id}>
                                     {case_.name}
