@@ -12,6 +12,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   onNewUpload?: () => void;
@@ -28,6 +30,23 @@ export function Header({
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [notifications] = useState(2);
+  const { signOut, user } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logout realizado",
+        description: "Você foi desconectado com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao fazer logout",
+        description: "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <motion.header 
@@ -123,7 +142,10 @@ export function Header({
                 Notificações
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive rounded-xl">
+              <DropdownMenuItem 
+                className="cursor-pointer text-destructive focus:text-destructive rounded-xl"
+                onClick={handleSignOut}
+              >
                 Sair
               </DropdownMenuItem>
             </DropdownMenuContent>

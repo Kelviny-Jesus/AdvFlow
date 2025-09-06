@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Upload as UploadIcon, 
@@ -20,21 +20,32 @@ import {
   Send,
   FolderPlus,
   UserPlus,
-  Folder
+  Folder,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { UploadFile, FolderItem } from "@/types";
-import { mockFolders } from "@/data/mocks";
+import type { UploadFile, FolderItem, UploadDestination } from "@/types";
 import { detectFileType, formatFileSize, getFileIcon } from "@/utils/fileUtils";
 import { toast } from "@/hooks/use-toast";
+import { useFolders } from "@/hooks/useFolders";
+import { useSmartUpload } from "@/hooks/useSmartUpload";
 
 const Uploads = () => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [folders] = useState<FolderItem[]>(mockFolders);
-  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Real Supabase data hooks
+  const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFolders();
+  const { 
+    uploadFiles, 
+    addFiles: addUploadFiles, 
+    removeFile: removeUploadFile, 
+    processUploads, 
+    clearAll: clearAllUploads,
+    completedCount,
+    errorCount,
+    totalProgress 
+  } = useSmartUpload();
   
   // Configurações de destino
   const [destinationType, setDestinationType] = useState<'existing_folder' | 'new_client' | 'new_subfolder'>('existing_folder');
@@ -64,34 +75,23 @@ const Uploads = () => {
   }, []);
 
   const addFiles = (newFiles: File[]) => {
-    const uploadFiles: UploadFile[] = newFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      status: 'pending',
-      progress: 0,
-      processingDate: new Date(),
-      destination: {
-        type: destinationType,
-        folderId: selectedFolderId || undefined,
-        clientName: newClientName || undefined,
-        subfolderName: newSubfolderName || undefined,
-        parentFolderId: selectedParentFolder || undefined,
-      }
-    }));
+    const destination: UploadDestination = {
+      type: destinationType,
+      folderId: destinationType === 'existing_folder' ? selectedFolderId : undefined,
+      clientName: destinationType === 'new_client' ? newClientName.trim() : undefined,
+      subfolderName: destinationType === 'new_subfolder' ? newSubfolderName.trim() : undefined,
+      parentFolderId: destinationType === 'new_subfolder' ? selectedParentFolder : undefined,
+    };
     
-    setFiles(prev => [...prev, ...uploadFiles]);
+    addUploadFiles(newFiles, destination);
   };
 
   const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
-  };
-
-  const updateFile = (id: string, updates: Partial<UploadFile>) => {
-    setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+    removeUploadFile(id);
   };
 
   const handleUploadAll = async () => {
-    if (files.length === 0) {
+    if (uploadFiles.length === 0) {
       toast({
         title: "Nenhum arquivo para enviar",
         description: "Adicione arquivos antes de fazer upload.",
@@ -128,7 +128,7 @@ const Uploads = () => {
       return;
     }
 
-    const pendingFiles = files.filter(f => f.status === 'pending');
+    const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
     if (pendingFiles.length === 0) {
       toast({
         title: "Todos os arquivos já foram processados",
@@ -138,86 +138,54 @@ const Uploads = () => {
       return;
     }
 
-    setIsUploading(true);
-
     try {
-      for (const file of pendingFiles) {
-        updateFile(file.id, { status: 'uploading', progress: 0 });
-
-        // Simular upload com progresso
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-          progress += Math.random() * 15;
-          if (progress >= 90) {
-            clearInterval(progressInterval);
-            progress = 90;
-          }
-          updateFile(file.id, { progress });
-        }, 200);
-
-        // Simular criação de pasta se necessário
-        if (destinationType === 'new_client') {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } else if (destinationType === 'new_subfolder') {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        // Simulate upload delay
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-        
-        clearInterval(progressInterval);
-        updateFile(file.id, { progress: 100, status: 'completed' });
-      }
-
-      const destinationText = destinationType === 'existing_folder' 
-        ? folders.find(f => f.id === selectedFolderId)?.name
-        : destinationType === 'new_client'
-        ? `Nova pasta: ${newClientName}`
-        : `Nova subpasta: ${newSubfolderName}`;
-
+      await processUploads();
+      
       toast({
         title: "Upload concluído!",
-        description: `${pendingFiles.length} arquivo(s) enviado(s) para ${destinationText}.`,
+        description: `${completedCount} arquivo(s) enviado(s) com sucesso.`,
       });
+      
+      if (errorCount > 0) {
+        toast({
+          title: "Alguns arquivos falharam",
+          description: `${errorCount} arquivo(s) não puderam ser enviados.`,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: "Erro no upload",
-        description: "Alguns arquivos falharam no upload.",
+        description: "Falha ao processar os arquivos.",
         variant: "destructive",
       });
-    } finally {
-      setIsUploading(false);
     }
   };
 
   const clearAll = () => {
-    setFiles([]);
+    clearAllUploads();
   };
 
-  const totalProgress = files.length > 0 
-    ? files.reduce((acc, file) => acc + file.progress, 0) / files.length 
-    : 0;
+  const completedFiles = uploadFiles.filter(f => f.status === 'completed').length;
 
-  const completedFiles = files.filter(f => f.status === 'completed').length;
+  // Preparar opções para os SearchableSelect
+  const allFolderOptions: SearchableSelectOption[] = folders.map(folder => ({
+    value: folder.id,
+    label: folder.path
+  }));
 
-  // Filtrar pastas baseado na busca
-  const filteredFolders = searchQuery.trim() 
-    ? folders.filter(folder => 
-        folder.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        folder.path.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : folders;
+  const clientFolderOptions: SearchableSelectOption[] = folders
+    .filter(f => f.kind === 'client')
+    .map(folder => ({
+      value: folder.id,
+      label: folder.name
+    }));
 
-  const clientFolders = filteredFolders.filter(f => f.kind === 'client');
-  const allFolders = filteredFolders.filter(f => f.kind !== 'client');
-  
-  // Reset seleção quando busca muda e não há resultados
-  useEffect(() => {
-    if (searchQuery.trim() && filteredFolders.length === 0) {
-      setSelectedFolderId("");
-      setSelectedParentFolder("");
-    }
-  }, [searchQuery, filteredFolders.length]);
+  // Handle errors
+  if (foldersError) {
+    console.error('Error loading folders:', foldersError);
+  }
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
@@ -226,10 +194,7 @@ const Uploads = () => {
           <AppSidebar />
           
           <div className="flex-1 flex flex-col">
-            <Header
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
+            <Header searchQuery="" onSearchChange={() => {}} />
             
             <main className="flex-1 p-6">
               <div className="max-w-5xl mx-auto space-y-6">
@@ -285,28 +250,18 @@ const Uploads = () => {
                       {destinationType === 'existing_folder' && (
                         <div className="space-y-2">
                           <Label>Selecionar pasta</Label>
-                          <Select 
-                            key={`folder-select-${searchQuery}`} 
-                            value={selectedFolderId} 
+                          <SearchableSelect
+                            options={allFolderOptions}
+                            value={selectedFolderId}
                             onValueChange={setSelectedFolderId}
-                          >
-                            <SelectTrigger className="rounded-2xl">
-                              <SelectValue placeholder="Escolha uma pasta..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredFolders.length > 0 ? (
-                                filteredFolders.map(folder => (
-                                  <SelectItem key={folder.id} value={folder.id}>
-                                    {folder.path}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <div className="p-2 text-sm text-muted-foreground text-center">
-                                  {searchQuery.trim() ? "Nenhuma pasta encontrada para a busca" : "Nenhuma pasta encontrada"}
-                                </div>
-                              )}
-                            </SelectContent>
-                          </Select>
+                            placeholder={foldersLoading ? "Carregando pastas..." : "Escolha uma pasta..."}
+                            searchPlaceholder="Buscar pasta..."
+                            emptyText={foldersLoading ? "Carregando..." : "Nenhuma pasta encontrada"}
+                            disabled={foldersLoading}
+                          />
+                          {foldersError && (
+                            <p className="text-sm text-destructive">Erro ao carregar pastas</p>
+                          )}
                         </div>
                       )}
 
@@ -326,28 +281,18 @@ const Uploads = () => {
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <Label>Pasta pai</Label>
-                            <Select 
-                              key={`client-select-${searchQuery}`} 
-                              value={selectedParentFolder} 
+                            <SearchableSelect
+                              options={clientFolderOptions}
+                              value={selectedParentFolder}
                               onValueChange={setSelectedParentFolder}
-                            >
-                              <SelectTrigger className="rounded-2xl">
-                                <SelectValue placeholder="Selecione a pasta pai..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {clientFolders.length > 0 ? (
-                                  clientFolders.map(folder => (
-                                    <SelectItem key={folder.id} value={folder.id}>
-                                      {folder.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="p-2 text-sm text-muted-foreground text-center">
-                                    {searchQuery.trim() ? "Nenhuma pasta de cliente encontrada para a busca" : "Nenhuma pasta de cliente encontrada"}
-                                  </div>
-                                )}
-                              </SelectContent>
-                            </Select>
+                              placeholder={foldersLoading ? "Carregando clientes..." : "Selecione a pasta pai..."}
+                              searchPlaceholder="Buscar cliente..."
+                              emptyText={foldersLoading ? "Carregando..." : "Nenhum cliente encontrado"}
+                              disabled={foldersLoading}
+                            />
+                            {foldersError && (
+                              <p className="text-sm text-destructive">Erro ao carregar clientes</p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label>Nome da subpasta</Label>
@@ -412,7 +357,7 @@ const Uploads = () => {
 
                 {/* Files List */}
                 <AnimatePresence>
-                  {files.length > 0 && (
+                  {uploadFiles.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
@@ -423,14 +368,14 @@ const Uploads = () => {
                         <CardHeader className="flex flex-row items-center justify-between">
                           <CardTitle className="flex items-center gap-2">
                             <FileText className="w-5 h-5 text-primary" />
-                            Arquivos para Upload ({files.length})
+                            Arquivos para Upload ({uploadFiles.length})
                           </CardTitle>
                           <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={clearAll}
-                              disabled={isUploading}
+                              disabled={totalProgress > 0 && totalProgress < 100}
                               className="rounded-2xl"
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
@@ -438,17 +383,17 @@ const Uploads = () => {
                             </Button>
                             <Button
                               onClick={handleUploadAll}
-                              disabled={isUploading || files.every(f => f.status === 'completed')}
+                              disabled={totalProgress > 0 && totalProgress < 100 || uploadFiles.every(f => f.status === 'completed')}
                               className="bg-gradient-primary rounded-2xl"
                             >
                               <Send className="w-4 h-4 mr-2" />
-                              {isUploading ? "Enviando..." : "Enviar Tudo"}
+                              {totalProgress > 0 && totalProgress < 100 ? "Enviando..." : "Enviar Tudo"}
                             </Button>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           {/* Progress Bar */}
-                          {isUploading && (
+                          {totalProgress > 0 && totalProgress < 100 && (
                             <div className="space-y-2">
                               <div className="flex justify-between text-sm">
                                 <span>Progresso Geral</span>
@@ -460,7 +405,7 @@ const Uploads = () => {
 
                           {/* Files */}
                           <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {files.map((file, index) => (
+                            {uploadFiles.map((file, index) => (
                               <motion.div
                                 key={file.id}
                                 initial={{ opacity: 0, x: -20 }}
@@ -515,7 +460,7 @@ const Uploads = () => {
                               className="mt-4 p-3 bg-success/10 border border-success/20 rounded-2xl"
                             >
                               <p className="text-sm text-success font-medium">
-                                ✓ {completedFiles} de {files.length} arquivo(s) enviado(s) com sucesso
+                                ✓ {completedFiles} de {uploadFiles.length} arquivo(s) enviado(s) com sucesso
                               </p>
                             </motion.div>
                           )}

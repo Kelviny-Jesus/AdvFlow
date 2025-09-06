@@ -48,6 +48,7 @@ export interface FolderItem {
   subfolderCount: number;
   createdAt: string;
   clientId?: string; // Para subpastas, indica qual cliente pertencem
+  caseId?: string; // Para pastas de caso, indica qual caso representa
   path: string; // Caminho completo da pasta (ex: "João Silva/Contratos")
 }
 
