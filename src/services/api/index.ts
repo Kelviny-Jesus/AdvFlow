@@ -155,7 +155,7 @@ class ApiService {
     return { data: filtered };
   }
 
-  // Petições
+  // Fatos
   async generatePetition(params: {
     clientId: string;
     caseId: string; 

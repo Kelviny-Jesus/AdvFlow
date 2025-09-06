@@ -273,8 +273,8 @@ COMMENT ON TABLE public.clients IS 'Clientes do escritório de advocacia';
 COMMENT ON TABLE public.cases IS 'Casos jurídicos associados aos clientes';
 COMMENT ON TABLE public.folders IS 'Estrutura hierárquica de pastas para organização';
 COMMENT ON TABLE public.documents IS 'Documentos armazenados no sistema';
-COMMENT ON TABLE public.petitions IS 'Petições geradas automaticamente';
-COMMENT ON TABLE public.facts IS 'Fatos extraídos dos documentos para petições';
+COMMENT ON TABLE public.petitions IS 'Fatos geradas automaticamente';
+COMMENT ON TABLE public.facts IS 'Fatos extraídos dos documentos para Fatos';
 COMMENT ON TABLE public.user_settings IS 'Configurações personalizadas do usuário';
 
 COMMENT ON FUNCTION public.get_next_doc_number(UUID) IS 'Gera o próximo número sequencial de documento para um cliente';

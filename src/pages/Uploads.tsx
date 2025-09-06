@@ -28,14 +28,14 @@ import { cn } from "@/lib/utils";
 import type { UploadFile, FolderItem, UploadDestination } from "@/types";
 import { detectFileType, formatFileSize, getFileIcon } from "@/utils/fileUtils";
 import { toast } from "@/hooks/use-toast";
-import { useFolders } from "@/hooks/useFolders";
-import { useSmartUpload } from "@/hooks/useSmartUpload";
+import { useFoldersReal } from "@/hooks/useFoldersReal";
+import { useSmartUploadReal } from "@/hooks/useSmartUploadReal";
 
 const Uploads = () => {
   const [isDragging, setIsDragging] = useState(false);
   
   // Real Supabase data hooks
-  const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFolders();
+  const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFoldersReal();
   const { 
     uploadFiles, 
     addFiles: addUploadFiles, 
@@ -44,8 +44,10 @@ const Uploads = () => {
     clearAll: clearAllUploads,
     completedCount,
     errorCount,
-    totalProgress 
-  } = useSmartUpload();
+    totalProgress,
+    isUploading,
+    canUpload
+  } = useSmartUploadReal();
   
   // Configurações de destino
   const [destinationType, setDestinationType] = useState<'existing_folder' | 'new_client' | 'new_subfolder'>('existing_folder');
@@ -77,12 +79,13 @@ const Uploads = () => {
   const addFiles = (newFiles: File[]) => {
     const destination: UploadDestination = {
       type: destinationType,
-      folderId: destinationType === 'existing_folder' ? selectedFolderId : undefined,
+      folderId: destinationType === 'existing_folder' ? (selectedFolderId || undefined) : undefined,
       clientName: destinationType === 'new_client' ? newClientName.trim() : undefined,
       subfolderName: destinationType === 'new_subfolder' ? newSubfolderName.trim() : undefined,
-      parentFolderId: destinationType === 'new_subfolder' ? selectedParentFolder : undefined,
+      parentFolderId: destinationType === 'new_subfolder' ? (selectedParentFolder || undefined) : undefined,
     };
     
+    console.log('Upload destination:', destination); // Debug log
     addUploadFiles(newFiles, destination);
   };
 
@@ -101,7 +104,7 @@ const Uploads = () => {
     }
 
     // Validar destino
-    if (destinationType === 'existing_folder' && !selectedFolderId) {
+    if (destinationType === 'existing_folder' && (!selectedFolderId || selectedFolderId.trim() === '')) {
       toast({
         title: "Selecione uma pasta",
         description: "Escolha a pasta de destino para os arquivos.",

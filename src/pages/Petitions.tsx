@@ -200,9 +200,9 @@ OAB/XX nº XXXXX`;
                   transition={{ duration: 0.3 }}
                   className="mb-6"
                 >
-                  <h1 className="text-3xl font-bold text-foreground">Gerador de Petições</h1>
+                  <h1 className="text-3xl font-bold text-foreground">Gerador de Fatos</h1>
                   <p className="text-muted-foreground">
-                    Crie petições automaticamente baseadas nos documentos das suas pastas
+                    Crie Fatos automaticamente baseadas nos documentos das suas pastas
                   </p>
                 </motion.div>
 

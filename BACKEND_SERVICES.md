@@ -115,7 +115,7 @@ const downloadUrl = await DocumentService.getDownloadUrl("doc-id");
 const nextNumber = await DocumentService.getNextDocNumber("client-id");
 ```
 
-### 5. **PetitionService** - Geração de Petições
+### 5. **PetitionService** - Geração de Fatos
 ```typescript
 import { PetitionService } from "@/services/petitionService";
 
@@ -246,7 +246,7 @@ function UploadPage() {
 - **cases**: Casos jurídicos
 - **folders**: Estrutura hierárquica de pastas
 - **documents**: Metadados dos documentos
-- **petitions**: Petições geradas
+- **petitions**: Fatos geradas
 - **facts**: Fatos extraídos dos documentos
 - **user_settings**: Configurações personalizadas
 

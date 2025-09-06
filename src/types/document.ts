@@ -9,6 +9,8 @@ export interface Document {
   status: 'processing' | 'completed' | 'error';
   url?: string;
   thumbnail?: string;
+  extractedData?: string | null;
+  extractionStatus?: 'pending' | 'completed' | 'failed' | 'not_supported';
   metadata?: {
     [key: string]: any;
   };

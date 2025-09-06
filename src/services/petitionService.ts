@@ -61,7 +61,7 @@ export class PetitionService {
   }
 
   /**
-   * Buscar petições do usuário
+   * Buscar Fatos do usuário
    */
   static async getPetitions(filters?: {
     clientId?: string;

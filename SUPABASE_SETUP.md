@@ -174,12 +174,12 @@ SELECT * FROM public.search_documents_fulltext('contrato');
 - `cases` - Casos jurídicos
 - `folders` - Estrutura hierárquica de pastas
 - `documents` - Documentos armazenados
-- `petitions` - Petições geradas
+- `petitions` - Fatos geradas
 - `facts` - Fatos extraídos
 - `user_settings` - Configurações do usuário
 
 ### **Tabelas de Relacionamento:**
-- `petition_documents` - Documentos x Petições
+- `petition_documents` - Documentos x Fatos
 - `fact_documents` - Fatos x Documentos
 - `audit_log` - Log de auditoria
 

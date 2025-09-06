@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { FileItem } from "@/types";
+import { withErrorHandling } from "@/lib/errors";
+import { logger, PerformanceMonitor } from "@/lib/logger";
+import { validateData, CreateDocumentSchema, UpdateDocumentSchema } from "@/lib/validations";
 
 type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
 type DocumentInsert = Database["public"]["Tables"]["documents"]["Insert"];
@@ -15,33 +18,52 @@ export class DocumentService {
     folderPath: string,
     onProgress?: (progress: number) => void
   ): Promise<string> {
-    const fileName = `${Date.now()}-${file.name}`;
-    const filePath = `${folderPath}/${fileName}`;
+    return withErrorHandling(async () => {
+      const operation = `uploadFile-${file.name}`;
+      PerformanceMonitor.startTimer(operation);
 
-    // Upload para o storage
-    const { data, error } = await supabase.storage
-      .from("documents")
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+      // Validar arquivo
+      if (file.size > 100 * 1024 * 1024) { // 100MB
+        throw new Error('Arquivo muito grande. Máximo: 100MB');
+      }
 
-    if (error) throw error;
+      const fileName = `${Date.now()}-${file.name}`;
+      const filePath = `${folderPath}/${fileName}`;
 
-    // Simular progresso se callback fornecido
-    if (onProgress) {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 20;
-        if (progress >= 100) {
-          clearInterval(interval);
-          progress = 100;
-        }
-        onProgress(progress);
-      }, 200);
-    }
+      logger.info('Starting file upload', {
+        fileName: file.name,
+        size: file.size,
+        path: filePath,
+      }, 'DocumentService');
 
-    return data.path;
+      // Upload real para o storage
+      const { data, error } = await supabase.storage
+        .from("documents")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      // Simular progresso se callback fornecido
+      if (onProgress) {
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 20;
+          if (progress >= 100) {
+            clearInterval(interval);
+            progress = 100;
+          }
+          onProgress(progress);
+        }, 200);
+      }
+
+      PerformanceMonitor.endTimer(operation);
+      logger.info('File upload completed', { path: data.path }, 'DocumentService');
+      
+      return data.path;
+    }, 'DocumentService.uploadFile');
   }
 
   /**
@@ -58,41 +80,62 @@ export class DocumentService {
     docNumber?: string;
     description?: string;
     supabaseStoragePath: string;
+    extractedData?: string | null;
   }): Promise<FileItem> {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user?.user?.id) throw new Error("Usuário não autenticado");
+    return withErrorHandling(async () => {
+      // Validar dados de entrada
+      const validData = validateData(CreateDocumentSchema, documentData);
+      
+      PerformanceMonitor.startTimer('createDocument');
+      
+      logger.info('Creating document', { 
+        name: validData.name, 
+        clientId: validData.clientId,
+        caseId: validData.caseId,
+      }, 'DocumentService');
 
-    // Gerar URLs do Supabase Storage
-    const { data: publicUrl } = supabase.storage
-      .from("documents")
-      .getPublicUrl(documentData.supabaseStoragePath);
+      // Criação real no Supabase
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) throw new Error("Usuário não autenticado");
 
-    const insertData: DocumentInsert = {
-      name: documentData.name,
-      mime_type: documentData.mimeType,
-      size: documentData.size,
-      client_id: documentData.clientId,
-      case_id: documentData.caseId,
-      folder_id: documentData.folderId || null,
-      type: documentData.type,
-      doc_number: documentData.docNumber || null,
-      description: documentData.description || null,
-      supabase_storage_path: documentData.supabaseStoragePath,
-      web_view_link: publicUrl.publicUrl,
-      download_link: publicUrl.publicUrl,
-      status: "active",
-      user_id: user.user.id,
-    };
+      // Gerar URLs do Supabase Storage
+      const { data: publicUrl } = supabase.storage
+        .from("documents")
+        .getPublicUrl(validData.supabaseStoragePath);
 
-    const { data, error } = await supabase
-      .from("documents")
-      .insert(insertData)
-      .select()
-      .single();
+      const insertData: DocumentInsert = {
+        name: validData.name,
+        mime_type: validData.mimeType,
+        size: validData.size,
+        client_id: validData.clientId || null,
+        case_id: validData.caseId || null,
+        folder_id: validData.folderId || null,
+        type: validData.type,
+        doc_number: validData.docNumber || null,
+        description: validData.description || null,
+        supabase_storage_path: validData.supabaseStoragePath,
+        web_view_link: publicUrl.publicUrl,
+        download_link: publicUrl.publicUrl,
+        extracted_data: documentData.extractedData || null,
+        status: "completed",
+        user_id: user.user.id,
+      };
 
-    if (error) throw error;
+      const { data, error } = await supabase
+        .from("documents")
+        .insert(insertData)
+        .select()
+        .single();
 
-    return this.mapDocumentRowToFileItem(data);
+      if (error) throw error;
+
+      const result = this.mapDocumentRowToFileItem(data);
+      
+      PerformanceMonitor.endTimer('createDocument');
+      logger.info('Document created successfully', { id: result.id }, 'DocumentService');
+      
+      return result;
+    }, 'DocumentService.createDocument');
   }
 
   /**
@@ -111,7 +154,7 @@ export class DocumentService {
       .from("documents")
       .select("*")
       .eq("user_id", user.user.id)
-      .eq("status", "active");
+      .eq("status", "completed");
 
     if (filters?.clientId) {
       query = query.eq("client_id", filters.clientId);
@@ -280,7 +323,7 @@ export class DocumentService {
       .from("documents")
       .select("*", { count: "exact", head: true })
       .eq("client_id", clientId)
-      .eq("status", "active");
+      .eq("status", "completed");
 
     if (error) throw error;
 
@@ -307,6 +350,7 @@ export class DocumentService {
       createdAt: row.created_at,
       modifiedAt: row.updated_at,
       description: row.description || undefined,
+      extractedData: row.extracted_data || undefined,
       appProperties: {
         ...((row.app_properties as Record<string, string>) || {}),
         folderId: row.folder_id || undefined,

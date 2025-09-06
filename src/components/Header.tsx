@@ -1,18 +1,9 @@
-import { useState } from "react";
-import { Search, Plus, Bell, Moon, Sun, User } from "lucide-react";
+import { Search, Plus, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface HeaderProps {
@@ -29,12 +20,10 @@ export function Header({
   showUploadButton = false 
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
-  const [notifications] = useState(2);
-  const { signOut, user } = useAuth();
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await supabase.auth.signOut();
       toast({
         title: "Logout realizado",
         description: "Você foi desconectado com sucesso.",
@@ -60,7 +49,7 @@ export function Header({
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar documentos, clientes, petições..."
+              placeholder="Buscar documentos, clientes, Fatos..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="pl-10 bg-muted/30 border-0 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all rounded-2xl"
@@ -105,51 +94,11 @@ export function Header({
 
           <Button
             variant="outline"
-            size="icon"
-            className="hover:bg-muted/50 transition-colors relative rounded-2xl"
+            onClick={handleSignOut}
+            className="hover:bg-muted/50 transition-colors rounded-2xl"
           >
-            <Bell className="w-4 h-4" />
-            {notifications > 0 && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Badge className="absolute -top-2 -right-2 w-5 h-5 p-0 text-xs bg-destructive hover:bg-destructive rounded-full">
-                  {notifications}
-                </Badge>
-              </motion.div>
-            )}
+            Sair
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="hover:bg-muted/50 transition-colors rounded-2xl"
-              >
-                <User className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-sm rounded-2xl">
-              <DropdownMenuItem className="cursor-pointer rounded-xl">
-                <User className="w-4 h-4 mr-2" />
-                Perfil
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer rounded-xl">
-                <Bell className="w-4 h-4 mr-2" />
-                Notificações
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="cursor-pointer text-destructive focus:text-destructive rounded-xl"
-                onClick={handleSignOut}
-              >
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
     </motion.header>

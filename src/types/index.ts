@@ -35,6 +35,8 @@ export interface FileItem {
   createdAt: string;
   modifiedAt: string;
   description?: string;
+  extractedData?: string;
+  extractionStatus?: 'pending' | 'processing' | 'completed' | 'failed' | 'not_supported';
   appProperties?: Record<string, string>;
 }
 

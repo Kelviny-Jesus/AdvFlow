@@ -1,10 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Upload,
-  FileText,
   FileCheck,
   Settings,
   FolderOpen,
+  Folder,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
 const navigationItems = [
-  { title: "Uploads", url: "/uploads", icon: Upload },
-  { title: "Documentos", url: "/", icon: FileText },
-  { title: "Petições", url: "/petitions", icon: FileCheck },
+  { title: "Uploads", url: "/", icon: Upload },
+  { title: "Pastas", url: "/folders", icon: Folder },
+  { title: "Fatos", url: "/petitions", icon: FileCheck },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
@@ -113,24 +113,6 @@ export function AppSidebar() {
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-border p-4">
-          <motion.div 
-            className="flex items-center gap-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-          >
-            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-              <span className="text-xs font-semibold text-muted-foreground">AD</span>
-            </div>
-            {open && (
-              <div>
-                <p className="text-sm font-medium text-foreground">Advogado</p>
-                <p className="text-xs text-muted-foreground">admin@docflow.com</p>
-              </div>
-            )}
-          </motion.div>
-        </SidebarFooter>
       </Sidebar>
 
       <Button
