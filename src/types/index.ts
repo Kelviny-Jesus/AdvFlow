@@ -28,6 +28,7 @@ export interface FileItem {
   size: number;
   clientId: string;
   caseId: string;
+  folderId?: string;
   type: 'pdf' | 'docx' | 'image' | 'audio' | 'video' | 'zip' | 'other';
   webViewLink?: string;
   downloadLink?: string;
@@ -60,6 +61,7 @@ export interface UploadDestination {
   clientName?: string; // Nome do novo cliente
   subfolderName?: string; // Nome da nova subpasta
   parentFolderId?: string; // ID da pasta pai para nova subpasta
+  isContext?: boolean; // Upload de contexto (sem renomeação por IA)
 }
 
 export interface UploadFile {

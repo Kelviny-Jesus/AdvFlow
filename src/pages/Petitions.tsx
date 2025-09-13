@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Header } from "@/components/Header";
@@ -47,6 +48,13 @@ const Petitions = () => {
   const [petitionContent, setPetitionContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const location = useLocation() as any;
+  useEffect(() => {
+    const st = location.state || {};
+    if (st.selectedFolderId) setSelectedFolderId(st.selectedFolderId);
+    if (Array.isArray(st.selectedFiles) && st.selectedFiles.length > 0) setSelectedFiles(st.selectedFiles);
+    if (st.prefilledPrompt) setPetitionContent(st.prefilledPrompt);
+  }, [location.state]);
 
   // Usar dados reais do Supabase
   const {
@@ -225,13 +233,11 @@ const Petitions = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-gradient-subtle">
-          <AppSidebar />
+        <AppSidebar />
+        <SidebarInset className="bg-gradient-subtle">
+          <Header searchQuery="" onSearchChange={() => {}} />
           
-          <div className="flex-1 flex flex-col">
-            <Header searchQuery="" onSearchChange={() => {}} />
-            
-            <main className="flex-1 p-6">
+          <main className="flex-1 p-6">
               <div className="max-w-7xl mx-auto">
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -554,9 +560,8 @@ const Petitions = () => {
                   </motion.div>
                 </div>
               </div>
-            </main>
-          </div>
-        </div>
+          </main>
+        </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>
   );

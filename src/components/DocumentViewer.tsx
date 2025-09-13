@@ -2,7 +2,7 @@
  * Componente para visualizar documentos em modal
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,15 @@ import {
   User,
   Hash,
   File,
-  Loader2
+  Loader2,
+  Pencil,
+  Check,
+  X,
+  Trash
 } from "lucide-react";
 import type { FileItem } from "@/types";
 import { formatFileSize } from "@/utils/fileUtils";
+import { DocumentService } from "@/services/documentService";
 
 interface DocumentViewerProps {
   document: FileItem;
@@ -27,6 +32,10 @@ interface DocumentViewerProps {
 
 export function DocumentViewer({ document, children }: DocumentViewerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newName, setNewName] = useState(document.name);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -58,15 +67,66 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
     }
   };
 
-  const handleDownload = () => {
-    if (document.downloadLink) {
-      window.open(document.downloadLink, '_blank');
+  const handleDownload = async () => {
+    try {
+      const ensureExt = (name: string, ext: string) => {
+        const lower = name.toLowerCase();
+        if (lower.endsWith(`.${ext}`)) return name;
+        return `${name}.${ext}`;
+      };
+      const fileName = ensureExt(newName || document.name, document.type || 'pdf');
+      const url = await DocumentService.getDownloadUrl(document.id, 60 * 10, fileName);
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error(e);
+      if (document.downloadLink) window.open(document.downloadLink, '_blank');
     }
   };
 
-  const handleOpenExternal = () => {
-    if (document.webViewLink) {
-      window.open(document.webViewLink, '_blank');
+  const handleOpenExternal = async () => {
+    try {
+      const url = await DocumentService.getDownloadUrl(document.id, 60 * 10);
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error(e);
+      if (document.webViewLink) window.open(document.webViewLink, '_blank');
+    }
+  };
+
+  useEffect(() => {
+    const fetchSigned = async () => {
+      try {
+        const url = await DocumentService.getDownloadUrl(document.id, 60 * 10);
+        setSignedUrl(url);
+      } catch (e) {
+        console.error(e);
+        setSignedUrl(document.webViewLink || null);
+      }
+    };
+    if (isOpen) {
+      fetchSigned();
+    }
+  }, [isOpen, document.id, document.webViewLink]);
+
+  const handleRename = async () => {
+    if (!newName.trim() || newName === document.name) {
+      setIsEditing(false);
+      return;
+    }
+    try {
+      await DocumentService.updateDocument(document.id, { name: newName.trim() });
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await DocumentService.deleteDocument(document.id);
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -98,7 +158,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
             </div>
           )}
           <iframe
-            src={`${document.webViewLink}#toolbar=0`}
+            src={`${(signedUrl || document.webViewLink) ?? ''}#toolbar=0`}
             className="w-full h-full border-0"
             title={document.name}
             onLoad={() => setIsLoading(false)}
@@ -125,6 +185,30 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
       );
     }
 
+    // Para DOCX, usar Office Online Viewer
+    if (document.type === 'docx') {
+      const viewerSrc = signedUrl || document.downloadLink || document.webViewLink || '';
+      return (
+        <div className="relative h-96 bg-muted rounded-lg overflow-hidden">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          )}
+          <iframe
+            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerSrc)}`}
+            className="w-full h-full border-0"
+            title={document.name}
+            onLoad={() => setIsLoading(false)}
+            onError={(e) => {
+              console.error('Office viewer error:', e);
+              setIsLoading(false);
+            }}
+          />
+        </div>
+      );
+    }
+
     // Para imagens, mostrar diretamente
     if (document.type === 'image' || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(document.type)) {
       return (
@@ -135,7 +219,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
             </div>
           )}
           <img
-            src={document.webViewLink}
+            src={signedUrl || document.webViewLink}
             alt={document.name}
             className="max-w-full max-h-full object-contain"
             onLoad={() => setIsLoading(false)}
@@ -162,7 +246,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
   };
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
@@ -171,11 +255,35 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
           <DialogTitle className="flex items-center gap-3">
             {getFileIcon(document.type)}
             <div className="flex-1 min-w-0">
-              <p className="truncate">{document.name}</p>
+              {!isEditing ? (
+                <div className="flex items-center gap-2">
+                  <p className="truncate">{document.name}</p>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}>
+                    <Pencil className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    className="w-full bg-background border rounded px-2 py-1 text-sm"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRename}>
+                    <Check className="w-3 h-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setIsEditing(false); setNewName(document.name); }}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="secondary" className="text-xs">
                   {document.type.toUpperCase()}
                 </Badge>
+                {document.appProperties && (document.appProperties as any).category === 'generated' && (
+                  <Badge variant="outline" className="text-xs">Documento Gerado pelo DocFlow</Badge>
+                )}
                 {document.docNumber && (
                   <Badge variant="outline" className="text-xs">
                     {document.docNumber}
@@ -231,6 +339,14 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
 
           {/* Ações */}
           <div className="flex justify-end gap-2">
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="flex items-center gap-2"
+            >
+              <Trash className="w-4 h-4" />
+              Excluir
+            </Button>
             <Button
               variant="outline"
               onClick={handleDownload}

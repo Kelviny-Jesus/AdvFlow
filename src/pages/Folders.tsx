@@ -2,8 +2,9 @@
  * Página para visualizar e gerenciar pastas - Interface Hierárquica estilo Google Drive
  */
 
-import { useState, useMemo } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Header } from "@/components/Header";
@@ -29,8 +30,18 @@ import {
   XCircle,
   Clock,
   Sparkles,
-  Wand2
+  Wand2,
+  Download,
+  Pencil,
+  Trash
 } from "lucide-react";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Button as UIButton } from "@/components/ui/button";
+import { FolderService } from "@/services/folderService";
+import { DocumentService } from "@/services/documentService";
+import { FolderDownloadService } from "@/services/folderDownloadService";
+import { useNavigate } from "react-router-dom";
+import { GenerateModal } from "@/components/GenerateModal";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -47,11 +58,24 @@ const Folders = () => {
   const [navigationHistory, setNavigationHistory] = useState<Array<{id: string | null, name: string}>>([
     { id: null, name: "Início" }
   ]);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [openGenerate, setOpenGenerate] = useState(false);
 
   // Hooks
-  const { data: folders = [], isLoading, error, refetch } = useFoldersReal();
+  const { data: foldersData = [], isLoading, error, refetch } = useFoldersReal();
+  const folders: FolderItem[] = (foldersData as unknown as FolderItem[]) || [];
   const createClientMutation = useCreateClientWithFolderReal();
-  const { data: documents = [], isLoading: documentsLoading } = useDocumentsByFolder(currentFolderId);
+  const { data: documentsData = [], isLoading: documentsLoading } = useDocumentsByFolder(currentFolderId);
+  const documents: FileItem[] = (documentsData as unknown as FileItem[]) || [];
+
+  // Permitir deep link para pasta específica (?folder=ID)
+  useEffect(() => {
+    const initialFolder = searchParams.get('folder');
+    if (initialFolder) {
+      setCurrentFolderId(initialFolder);
+    }
+  }, [searchParams]);
 
   // Filtrar pastas baseado na pasta atual
   const currentFolders = useMemo(() => {
@@ -66,6 +90,37 @@ const Folders = () => {
 
   // Pasta atual
   const currentFolder = currentFolderId ? folders.find(f => f.id === currentFolderId) : null;
+
+  // Ações de pasta/documento
+  const renameFolder = async (folder: FolderItem) => {
+    const newName = prompt('Novo nome da pasta', folder.name);
+    if (!newName || newName.trim() === '' || newName === folder.name) return;
+    try {
+      await FolderService.updateFolder(folder.id, { name: newName.trim(), path: folder.path.replace(folder.name, newName.trim()) });
+      refetch();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteFolder = async (folder: FolderItem) => {
+    if (!confirm(`Excluir pasta "${folder.name}"?`)) return;
+    try {
+      await FolderService.deleteFolder(folder.id);
+      setCurrentFolderId(null);
+      setNavigationHistory([{ id: null, name: 'Início' }]);
+      refetch();
+    } catch (e) { console.error(e); }
+  };
+
+  const renameDocument = async (doc: FileItem) => {
+    const newName = prompt('Novo nome do documento', doc.name);
+    if (!newName || newName.trim() === '' || newName === doc.name) return;
+    try { await DocumentService.updateDocument(doc.id, { name: newName.trim() }); refetch(); } catch (e) { console.error(e); }
+  };
+
+  const deleteDocument = async (doc: FileItem) => {
+    if (!confirm(`Excluir documento "${doc.name}"?`)) return;
+    try { await DocumentService.deleteDocument(doc.id); refetch(); } catch (e) { console.error(e); }
+  };
 
   // Funções de navegação
   const navigateToFolder = (folder: FolderItem) => {
@@ -124,6 +179,7 @@ const Folders = () => {
     const extractionStatus = document.extractionStatus || 'pending';
     const hasExtractedData = !!document.extractedData;
     const isAIRenamed = document.name && document.name.startsWith('DOC n.');
+    const isGenerated = document.appProperties && (document.appProperties as any).category === 'generated';
     
     // Se tem dados extraídos e foi renomeado pela IA
     if (hasExtractedData && isAIRenamed) {
@@ -135,6 +191,16 @@ const Folders = () => {
       );
     }
     
+    // Documento gerado pelo sistema: não mostrar fila de extração
+    if (isGenerated) {
+      return (
+        <div className="flex items-center gap-1 text-teal-600">
+          <CheckCircle className="w-3 h-3" />
+          <span className="text-xs">Documento gerado pelo DocFlow</span>
+        </div>
+      );
+    }
+
     // Status de extração
     switch (extractionStatus) {
       case 'completed':
@@ -235,12 +301,20 @@ const Folders = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col">
-            <Header />
-            <main className="flex-1 p-6">
+        <AppSidebar />
+        <SidebarInset className="bg-background">
+          <Header showGenerateButton={false} />
+          <main className="flex-1 p-6">
               <div className="max-w-7xl mx-auto space-y-6">
+                <div>
+                  <Button
+                    onClick={() => setOpenGenerate(true)}
+                    className="w-full h-12 text-lg bg-teal-600 hover:bg-teal-700 rounded-2xl"
+                  >
+                    GERAR
+                    <Wand2 className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
                 {/* Header com Breadcrumb */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -257,9 +331,16 @@ const Folders = () => {
                         </Button>
                       )}
                       <div>
-                        <h1 className="text-3xl font-bold tracking-tight">
-                          {currentFolder ? currentFolder.name : "Pastas"}
-                        </h1>
+                        <div className="flex items-center gap-2">
+                          <h1 className="text-3xl font-bold tracking-tight">
+                            {currentFolder ? currentFolder.name : "Pastas"}
+                          </h1>
+                          {currentFolder && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => renameFolder(currentFolder)}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                         <p className="text-muted-foreground">
                           {currentFolder 
                             ? `${currentFolders.length} pasta(s) • ${documents.length} documento(s)`
@@ -276,6 +357,16 @@ const Folders = () => {
                         <FolderPlus className="w-4 h-4" />
                         Novo Cliente
                       </Button>
+                    )}
+                    {currentFolder && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => FolderDownloadService.downloadFolderAsZip(currentFolder)} className="flex items-center gap-2">
+                          <Download className="w-4 h-4" /> Baixar Pasta
+                        </Button>
+                        <Button variant="destructive" onClick={() => deleteFolder(currentFolder)} className="flex items-center gap-2">
+                          <Trash className="w-4 h-4" /> Excluir Pasta
+                        </Button>
+                      </div>
                     )}
                   </div>
 
@@ -416,22 +507,23 @@ const Folders = () => {
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 transition={{ duration: 0.2 }}
-                                onClick={() => navigateToFolder(folder)}
                               >
-                                <Card className="h-full cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50">
-                                  <CardContent className="p-6">
-                                    <div className="flex items-start justify-between mb-4">
-                                      <div className="flex items-center gap-3">
-                                        {getKindIcon(folder.kind)}
-                                        <div className="flex-1 min-w-0">
-                                          <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
-                                          <Badge variant="secondary" className="text-xs">
-                                            {getKindLabel(folder.kind)}
-                                          </Badge>
+                                <ContextMenu>
+                                  <ContextMenuTrigger>
+                                    <Card className="h-full cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50" onClick={() => navigateToFolder(folder)}>
+                                      <CardContent className="p-6">
+                                        <div className="flex items-start justify-between mb-4">
+                                          <div className="flex items-center gap-3">
+                                            {getKindIcon(folder.kind)}
+                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                              <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameFolder(folder); }}>
+                                                <Pencil className="w-4 h-4" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                         </div>
-                                      </div>
-                                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                    </div>
 
                                     <div className="space-y-2 text-sm text-muted-foreground">
                                       <div className="flex items-center gap-2">
@@ -454,8 +546,14 @@ const Folders = () => {
                                         {folder.subfolderCount || 0} subpastas
                                       </div>
                                     </div>
-                                  </CardContent>
-                                </Card>
+                                      </CardContent>
+                                    </Card>
+                                  </ContextMenuTrigger>
+                                  <ContextMenuContent>
+                                    <ContextMenuItem onClick={() => renameFolder(folder)}>Renomear</ContextMenuItem>
+                                    <ContextMenuItem onClick={() => deleteFolder(folder)} className="text-destructive">Excluir</ContextMenuItem>
+                                  </ContextMenuContent>
+                                </ContextMenu>
                               </motion.div>
                             ))}
                           </div>
@@ -475,51 +573,65 @@ const Folders = () => {
                                 whileHover={{ scale: 1.02 }}
                                 transition={{ duration: 0.2 }}
                               >
-                                <DocumentViewer document={document}>
-                                  <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
-                                    <CardContent className="p-4">
-                                      <div className="flex items-start gap-3 mb-3">
-                                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                          <FileText className="w-4 h-4 text-blue-600" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <h3 className="font-medium text-sm truncate">{document.name}</h3>
-                                          <p className="text-xs text-muted-foreground">
-                                            {document.docNumber}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="space-y-1 text-xs text-muted-foreground">
-                                        <div className="flex justify-between">
-                                          <span>Tamanho:</span>
-                                          <span>{formatFileSize(document.size)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span>Tipo:</span>
-                                          <span className="uppercase">{document.type}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span>Criado:</span>
-                                          <span>{formatDate(document.createdAt)}</span>
-                                        </div>
-                                      </div>
+                                <ContextMenu>
+                                  <ContextMenuTrigger>
+                                    <DocumentViewer document={document}>
+                                      <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
+                                        <CardContent className="p-4">
+                                          <div className="flex items-start gap-3 mb-3">
+                                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                              <FileText className="w-4 h-4 text-blue-600" />
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                              <h3 className="font-medium text-sm truncate">{document.name}</h3>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameDocument(document); }}>
+                                                <Pencil className="w-3 h-3" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                          
+                                          {document.appProperties && (document.appProperties as any).category === 'generated' && (
+                                            <div className="mb-2">
+                                              <Badge variant="outline" className="text-[10px]">Documento Gerado pelo DocFlow</Badge>
+                                            </div>
+                                          )}
 
-                                      {/* Status de extração */}
-                                      <div className="mt-2 pt-2 border-t">
-                                        <ExtractionStatus document={document} />
-                                      </div>
+                                          <div className="space-y-1 text-xs text-muted-foreground">
+                                            <div className="flex justify-between">
+                                              <span>Tamanho:</span>
+                                              <span>{formatFileSize(document.size)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span>Tipo:</span>
+                                              <span className="uppercase">{document.type}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <span>Criado:</span>
+                                              <span>{formatDate(document.createdAt)}</span>
+                                            </div>
+                                          </div>
 
-                                      {/* Indicador visual de que é clicável */}
-                                      <div className="mt-2 pt-2 border-t flex items-center justify-center">
-                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                          <FileText className="w-3 h-3" />
-                                          Clique para visualizar
-                                        </span>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </DocumentViewer>
+                                          {/* Status de extração */}
+                                          <div className="mt-2 pt-2 border-t">
+                                            <ExtractionStatus document={document} />
+                                          </div>
+
+                                          {/* Indicador visual de que é clicável */}
+                                          <div className="mt-2 pt-2 border-t flex items-center justify-center">
+                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                              <FileText className="w-3 h-3" />
+                                              Clique para visualizar
+                                            </span>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    </DocumentViewer>
+                                  </ContextMenuTrigger>
+                                  <ContextMenuContent>
+                                    <ContextMenuItem onClick={() => renameDocument(document)}>Renomear</ContextMenuItem>
+                                    <ContextMenuItem onClick={() => deleteDocument(document)} className="text-destructive">Excluir</ContextMenuItem>
+                                  </ContextMenuContent>
+                                </ContextMenu>
                               </motion.div>
                             ))}
                           </div>
@@ -529,9 +641,9 @@ const Folders = () => {
                   </AnimatePresence>
                 )}
               </div>
-            </main>
-          </div>
-        </div>
+          </main>
+          <GenerateModal open={openGenerate} onOpenChange={setOpenGenerate} />
+        </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>
   );

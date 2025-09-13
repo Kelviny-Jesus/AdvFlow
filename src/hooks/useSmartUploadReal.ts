@@ -9,11 +9,13 @@ import { DocumentFolderService } from "@/services/documentFolderService";
 import { detectFileType } from "@/utils/fileUtils";
 import { toast } from "@/hooks/use-toast";
 import { logger, PerformanceMonitor } from "@/lib/logger";
+import { playActionSfx } from "@/lib/sfx";
 import { getErrorMessage } from "@/lib/errors";
 import type { UploadFile, UploadDestination, Client, Case, FolderItem } from "@/types";
 
 export function useSmartUploadReal() {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
+  const [lastTargetFolder, setLastTargetFolder] = useState<FolderItem | null>(null);
   const queryClient = useQueryClient();
 
   const addFiles = (files: File[], destination: UploadDestination) => {
@@ -118,6 +120,7 @@ export function useSmartUploadReal() {
 
       logger.info('Starting upload process', { fileCount: pendingFiles.length }, 'useSmartUploadReal');
       PerformanceMonitor.startTimer('processUploads');
+      playActionSfx();
 
       const results: { success: number; errors: number } = { success: 0, errors: 0 };
 
@@ -127,6 +130,7 @@ export function useSmartUploadReal() {
 
           // 1. Resolver destino (criar pasta se necessário)
           const targetFolder = await resolveDestination(uploadFile.destination);
+          setLastTargetFolder(targetFolder);
           
           logger.info('Target folder resolved', { 
             folderId: targetFolder.id, 
@@ -142,13 +146,21 @@ export function useSmartUploadReal() {
             size: uploadFile.file.size 
           }, 'useSmartUploadReal');
 
-          const document = await DocumentFolderService.uploadDocumentToFolder(
-            uploadFile.file,
-            targetFolder,
-            (progress) => {
-              updateFileStatus(uploadFile.id, { progress });
-            }
-          );
+          const document = uploadFile.destination?.isContext
+            ? await DocumentFolderService.uploadContextToFolder(
+                uploadFile.file,
+                targetFolder,
+                (progress) => {
+                  updateFileStatus(uploadFile.id, { progress });
+                }
+              )
+            : await DocumentFolderService.uploadDocumentToFolder(
+                uploadFile.file,
+                targetFolder,
+                (progress) => {
+                  updateFileStatus(uploadFile.id, { progress });
+                }
+              );
 
           updateFileStatus(uploadFile.id, { 
             status: "completed", 
@@ -216,6 +228,7 @@ export function useSmartUploadReal() {
   return {
     // State
     uploadFiles,
+    lastTargetFolder,
     
     // Actions
     addFiles,

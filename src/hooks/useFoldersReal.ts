@@ -20,7 +20,7 @@ export const folderKeysReal = {
  * Hook para buscar pastas
  */
 export function useFoldersReal(parentId?: string) {
-  return useQuery({
+  return useQuery<FolderItem[]>({
     queryKey: folderKeysReal.list(parentId),
     queryFn: () => FolderServiceReal.getFolders(parentId),
     staleTime: 2 * 60 * 1000, // 2 minutos

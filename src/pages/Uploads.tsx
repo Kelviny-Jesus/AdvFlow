@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Header } from "@/components/Header";
@@ -21,7 +21,9 @@ import {
   FolderPlus,
   UserPlus,
   Folder,
-  Loader2
+  Loader2,
+  Wand2,
+  FolderOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -30,9 +32,14 @@ import { detectFileType, formatFileSize, getFileIcon } from "@/utils/fileUtils";
 import { toast } from "@/hooks/use-toast";
 import { useFoldersReal } from "@/hooks/useFoldersReal";
 import { useSmartUploadReal } from "@/hooks/useSmartUploadReal";
+import { useNavigate } from "react-router-dom";
+import { GenerateModal } from "@/components/GenerateModal";
 
 const Uploads = () => {
   const [isDragging, setIsDragging] = useState(false);
+  const [panel, setPanel] = useState<'context' | 'docs'>('context');
+  const navigate = useNavigate();
+  const [openGenerate, setOpenGenerate] = useState(false);
   
   // Real Supabase data hooks
   const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFoldersReal();
@@ -46,7 +53,8 @@ const Uploads = () => {
     errorCount,
     totalProgress,
     isUploading,
-    canUpload
+    canUpload,
+    lastTargetFolder
   } = useSmartUploadReal();
   
   // Configurações de destino
@@ -83,6 +91,7 @@ const Uploads = () => {
       clientName: destinationType === 'new_client' ? newClientName.trim() : undefined,
       subfolderName: destinationType === 'new_subfolder' ? newSubfolderName.trim() : undefined,
       parentFolderId: destinationType === 'new_subfolder' ? (selectedParentFolder || undefined) : undefined,
+      isContext: panel === 'context',
     };
     
     console.log('Upload destination:', destination); // Debug log
@@ -193,14 +202,21 @@ const Uploads = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-gradient-subtle">
-          <AppSidebar />
+        <AppSidebar />
+        <SidebarInset className="bg-gradient-subtle">
+          <Header searchQuery="" onSearchChange={() => {}} showGenerateButton={false} />
           
-          <div className="flex-1 flex flex-col">
-            <Header searchQuery="" onSearchChange={() => {}} />
-            
-            <main className="flex-1 p-6">
+          <main className="flex-1 p-6">
               <div className="max-w-5xl mx-auto space-y-6">
+                <div>
+                  <Button
+                    onClick={() => setOpenGenerate(true)}
+                    className="w-full h-12 text-lg bg-teal-600 hover:bg-teal-700 rounded-2xl"
+                  >
+                    GERAR
+                    <Wand2 className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -212,6 +228,45 @@ const Uploads = () => {
                   </p>
                 </motion.div>
 
+                {/* Seletor de painel (Contexto x Docs) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setPanel('context')}
+                    className={cn(
+                      "rounded-2xl border-2 p-6 text-left transition-all",
+                      panel === 'context' ? 'border-teal-600 bg-teal-600/5' : 'border-teal-700/40 hover:border-teal-600'
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-teal-600/20 text-teal-600 flex items-center justify-center">
+                        <FolderOpen className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-xl font-bold tracking-wide">CONTEXTO</div>
+                        <div className="text-sm text-muted-foreground">Áudios, textos e notas para enriquecer o caso</div>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setPanel('docs')}
+                    className={cn(
+                      "rounded-2xl border-2 p-6 text-left transition-all",
+                      panel === 'docs' ? 'border-teal-600 bg-teal-600/5' : 'border-teal-700/40 hover:border-teal-600'
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-teal-600/20 text-teal-600 flex items-center justify-center">
+                        <FolderOpen className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-xl font-bold tracking-wide">Docs</div>
+                        <div className="text-sm text-muted-foreground">Fluxo atual com renomeação por IA</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
                 {/* Configuração de Destino */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -222,7 +277,7 @@ const Uploads = () => {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <FolderPlus className="w-5 h-5 text-primary" />
-                        Destino dos Arquivos
+                        {panel === 'context' ? 'Destino do Contexto' : 'Destino dos Arquivos'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -335,7 +390,7 @@ const Uploads = () => {
                       >
                         <UploadIcon className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-foreground mb-2">
-                          {isDragging ? "Solte os arquivos aqui" : "Arraste arquivos ou clique para selecionar"}
+                          {isDragging ? "Solte os arquivos aqui" : panel === 'context' ? 'Contexto: arraste áudios, textos, PDFs...' : 'Arraste arquivos ou clique para selecionar'}
                         </h3>
                         <p className="text-muted-foreground">
                           PDF, DOCX, Imagens, Áudio e mais
@@ -351,7 +406,7 @@ const Uploads = () => {
                               e.target.value = '';
                             }
                           }}
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.mp4,.zip"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.mp4,.zip,.txt,.md"
                         />
                       </motion.div>
                     </CardContent>
@@ -371,7 +426,7 @@ const Uploads = () => {
                         <CardHeader className="flex flex-row items-center justify-between">
                           <CardTitle className="flex items-center gap-2">
                             <FileText className="w-5 h-5 text-primary" />
-                            Arquivos para Upload ({uploadFiles.length})
+                            {panel === 'context' ? 'Itens de Contexto' : 'Arquivos para Upload'} ({uploadFiles.length})
                           </CardTitle>
                           <div className="flex gap-2">
                             <Button
@@ -390,7 +445,7 @@ const Uploads = () => {
                               className="bg-gradient-primary rounded-2xl"
                             >
                               <Send className="w-4 h-4 mr-2" />
-                              {totalProgress > 0 && totalProgress < 100 ? "Enviando..." : "Enviar Tudo"}
+                              {totalProgress > 0 && totalProgress < 100 ? "Enviando..." : panel === 'context' ? 'Salvar Contexto' : 'Enviar Tudo'}
                             </Button>
                           </div>
                         </CardHeader>
@@ -472,10 +527,21 @@ const Uploads = () => {
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* Botão Ir para Pasta */}
+                <div className="flex justify-center pt-2">
+                  <Button
+                    disabled={!lastTargetFolder}
+                    onClick={() => lastTargetFolder && navigate(`/folders?folder=${lastTargetFolder.id}`)}
+                    className="bg-teal-600 hover:bg-teal-700 rounded-2xl"
+                  >
+                    IR PARA PASTA
+                  </Button>
+                </div>
               </div>
-            </main>
-          </div>
-        </div>
+          </main>
+          <GenerateModal open={openGenerate} onOpenChange={setOpenGenerate} />
+        </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>
   );

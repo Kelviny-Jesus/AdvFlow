@@ -170,7 +170,7 @@ export class DocumentFolderService {
       console.log('📝 Nome único gerado:', uniqueFileName);
 
       // 2. Definir caminho no storage baseado na hierarquia da pasta
-      const storagePath = this.generateStoragePath(folder, uniqueFileName);
+      const storagePath = this.generateStoragePath(folder, uniqueFileName, user.user.id);
       
       logger.info('Generated storage path', { storagePath }, 'DocumentFolderService');
 
@@ -275,11 +275,8 @@ export class DocumentFolderService {
 
       // 8. Iniciar extração de dados (processo assíncrono)
       this.processDocumentExtraction(result, publicUrl.publicUrl, fileToUpload.type)
-        .catch(error => {
-          logger.error('Failed to process document extraction', {
-            documentId: result.id,
-            error: error.message
-          }, 'DocumentFolderService');
+        .catch((error) => {
+          logger.error('Failed to process document extraction', error as Error, { documentId: result.id }, 'DocumentFolderService');
         });
 
       PerformanceMonitor.endTimer(operation);
@@ -292,6 +289,168 @@ export class DocumentFolderService {
 
       return result;
     }, 'DocumentFolderService.uploadDocumentToFolder');
+  }
+
+  /**
+   * Upload de arquivo de CONTEXTO (sem renomeação por IA), mantendo extração de dados
+   */
+  static async uploadContextToFolder(
+    file: File,
+    folder: FolderItem,
+    onProgress?: (progress: number) => void
+  ): Promise<FileItem> {
+    return withErrorHandling(async () => {
+      const operation = `uploadContextToFolder-${file.name}`;
+      PerformanceMonitor.startTimer(operation);
+
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) throw new Error("Usuário não autenticado");
+
+      // 1. Converter JPG para PDF se necessário
+      const conversionResult = await this.convertJpgToPdfIfNeeded(file);
+      const fileToUpload = conversionResult.file;
+
+      // 2. Gerar nome único para o arquivo
+      const timestamp = Date.now();
+      const sanitizedFileName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const uniqueFileName = `${timestamp}-${sanitizedFileName}`;
+
+      // 3. Caminho no storage
+      const storagePath = this.generateStoragePath(folder, uniqueFileName, user.user.id);
+
+      // 4. Upload para storage
+      const { error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(storagePath, fileToUpload, { cacheControl: "3600", upsert: false });
+      if (uploadError) throw uploadError;
+
+      if (onProgress) onProgress(50);
+
+      // 5. URLs públicas
+      const { data: publicUrl } = supabase.storage.from("documents").getPublicUrl(storagePath);
+      const { data: downloadUrl } = await supabase.storage
+        .from("documents").createSignedUrl(storagePath, 3600);
+
+      // 6. IDs padrão se necessário
+      let finalCaseId = folder.caseId;
+      let finalClientId = folder.clientId;
+      if (!finalCaseId && folder.kind === 'client') {
+        const def = await this.createDefaultCaseForClient(folder);
+        finalCaseId = def.id;
+        finalClientId = def.clientId;
+      } else if (!finalCaseId && !finalClientId) {
+        const def = await this.getOrCreateDefaultIds(user.user.id);
+        finalClientId = def.clientId;
+        finalCaseId = def.caseId;
+      }
+
+      // 7. Inserir no banco sem renomeação (com app_properties.category="context")
+      const insertData: DocumentInsert = {
+        name: fileToUpload.name,
+        mime_type: fileToUpload.type,
+        size: fileToUpload.size,
+        client_id: finalClientId!,
+        case_id: finalCaseId!,
+        folder_id: folder.id,
+        type: detectFileType(fileToUpload.name),
+        doc_number: null,
+        supabase_storage_path: storagePath,
+        web_view_link: publicUrl.publicUrl,
+        download_link: downloadUrl?.signedUrl || publicUrl.publicUrl,
+        status: "completed",
+        user_id: user.user.id,
+        app_properties: { category: 'context' },
+      } as unknown as DocumentInsert;
+
+      const { data: documentRecord, error: dbError } = await supabase
+        .from("documents")
+        .insert(insertData)
+        .select()
+        .single();
+      if (dbError) throw dbError;
+
+      if (onProgress) onProgress(80);
+
+      // 8. Mapear e processar extração (sem IA) + renomear como CONTEXTO
+      const result = this.mapDocumentRowToFileItem(documentRecord as unknown as DocumentRow);
+      await this.processDocumentExtractionContext(result, publicUrl.publicUrl, fileToUpload.type);
+      await this.processContextRenaming(result);
+
+      if (onProgress) onProgress(100);
+      PerformanceMonitor.endTimer(operation);
+      return result;
+    }, 'DocumentFolderService.uploadContextToFolder');
+  }
+
+  /**
+   * Extração para CONTEXTO (sem renomeação por IA)
+   */
+  private static async processDocumentExtractionContext(
+    document: FileItem,
+    fileUrl: string,
+    mimeType: string
+  ): Promise<void> {
+    return withErrorHandling(async () => {
+      const extractedData = await extractionService.extractDocumentData({
+        documentId: document.id,
+        fileName: document.name,
+        fileUrl,
+        mimeType,
+      });
+
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) return;
+
+      const { error: updateError } = await supabase
+        .from("documents")
+        .update({
+          extracted_data: extractedData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document.id)
+        .eq("user_id", user.user.id);
+
+      if (updateError) throw updateError;
+    }, 'DocumentFolderService.processDocumentExtractionContext');
+  }
+
+  /**
+   * Renomear documento de CONTEXTO com padrão "Contexto n. 001"
+   */
+  private static async processContextRenaming(document: FileItem): Promise<void> {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user?.user?.id) return;
+
+    const clientId = document.clientId;
+    if (!clientId) return;
+
+    // Calcular próximo número sequencial apenas para documentos de contexto do cliente
+    const nextNumber = await this.getNextContextNumber(clientId, user.user.id, document.id);
+    const nextPadded = String(nextNumber).padStart(3, '0');
+    const newName = `Contexto n. ${nextPadded}`;
+
+    await supabase
+      .from('documents')
+      .update({ name: newName, updated_at: new Date().toISOString() })
+      .eq('id', document.id)
+      .eq('user_id', user.user.id);
+  }
+
+  /**
+   * Buscar próximo número de contexto por cliente (apenas documentos com app_properties.category = 'context')
+   */
+  private static async getNextContextNumber(clientId: string, userId: string, excludeDocumentId?: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .contains('app_properties', { category: 'context' })
+      .neq(excludeDocumentId ? 'id' : 'id', excludeDocumentId || '00000000-0000-0000-0000-000000000000');
+
+    if (error) throw error;
+    return (count || 0) + 1;
   }
 
   /**
@@ -373,9 +532,7 @@ export class DocumentFolderService {
       // Atualizar documento com os dados extraídos
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) {
-        logger.error('User not authenticated during extraction update', {
-          documentId: document.id
-        }, 'DocumentFolderService');
+        logger.error('User not authenticated during extraction update', new Error('Unauthenticated'), { documentId: document.id }, 'DocumentFolderService');
         return;
       }
 
@@ -389,10 +546,7 @@ export class DocumentFolderService {
         .eq("user_id", user.user.id);
 
       if (updateError) {
-        logger.error('Failed to update document with extracted data', {
-          documentId: document.id,
-          error: updateError.message
-        }, 'DocumentFolderService');
+        logger.error('Failed to update document with extracted data', updateError, { documentId: document.id }, 'DocumentFolderService');
         throw updateError;
       }
 
@@ -596,9 +750,7 @@ export class DocumentFolderService {
       // Atualizar nome do documento no banco
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) {
-        logger.error('User not authenticated during AI renaming update', {
-          documentId: document.id
-        }, 'DocumentFolderService');
+        logger.error('User not authenticated during AI renaming update', new Error('Unauthenticated'), { documentId: document.id }, 'DocumentFolderService');
         return;
       }
 
@@ -612,11 +764,7 @@ export class DocumentFolderService {
         .eq("user_id", user.user.id);
 
       if (updateError) {
-        logger.error('Failed to update document name with AI suggestion', {
-          documentId: document.id,
-          suggestedName: finalSuggestedName,
-          error: updateError.message
-        }, 'DocumentFolderService');
+        logger.error('Failed to update document name with AI suggestion', updateError, { documentId: document.id, suggestedName: finalSuggestedName }, 'DocumentFolderService');
         throw updateError;
       }
 
@@ -709,7 +857,7 @@ export class DocumentFolderService {
       if (error || !data) return undefined;
       return data.name;
     } catch (error) {
-      logger.error('Failed to get client name', { clientId, error }, 'DocumentFolderService');
+      logger.error('Failed to get client name', error as Error, { clientId }, 'DocumentFolderService');
       return undefined;
     }
   }
@@ -728,7 +876,7 @@ export class DocumentFolderService {
       if (error || !data) return undefined;
       return data.reference;
     } catch (error) {
-      logger.error('Failed to get case reference', { caseId, error }, 'DocumentFolderService');
+      logger.error('Failed to get case reference', error as Error, { caseId }, 'DocumentFolderService');
       return undefined;
     }
   }
@@ -799,7 +947,7 @@ export class DocumentFolderService {
       };
 
     } catch (error) {
-      logger.error('Failed to get last renamed document', { clientId, error }, 'DocumentFolderService');
+      logger.error('Failed to get last renamed document', error as Error, { clientId }, 'DocumentFolderService');
       return null;
     }
   }
@@ -807,27 +955,27 @@ export class DocumentFolderService {
   /**
    * Gerar caminho no storage baseado na hierarquia da pasta
    */
-  private static generateStoragePath(folder: FolderItem, fileName: string): string {
+  private static generateStoragePath(folder: FolderItem, fileName: string, userId: string): string {
     const sanitizedFolderName = folder.name.replace(/[^a-zA-Z0-9-_]/g, '_');
     
     switch (folder.kind) {
       case 'client':
-        return `clients/${sanitizedFolderName}/${fileName}`;
+        return `${userId}/clients/${sanitizedFolderName}/${fileName}`;
       
       case 'case':
         // Para casos, incluir o nome do cliente se disponível
         const clientPath = folder.path?.split('/')[0] || 'unknown_client';
         const sanitizedClientPath = clientPath.replace(/[^a-zA-Z0-9-_]/g, '_');
-        return `clients/${sanitizedClientPath}/cases/${sanitizedFolderName}/${fileName}`;
+        return `${userId}/clients/${sanitizedClientPath}/cases/${sanitizedFolderName}/${fileName}`;
       
       case 'subfolder':
         // Para subpastas, usar o path completo
         const pathParts = folder.path?.split('/') || [folder.name];
         const sanitizedPath = pathParts.map(part => part.replace(/[^a-zA-Z0-9-_]/g, '_')).join('/');
-        return `folders/${sanitizedPath}/${fileName}`;
+        return `${userId}/folders/${sanitizedPath}/${fileName}`;
       
       default:
-        return `general/${fileName}`;
+        return `${userId}/general/${fileName}`;
     }
   }
 
@@ -947,6 +1095,7 @@ export class DocumentFolderService {
    * Mapear DocumentRow para FileItem
    */
   private static mapDocumentRowToFileItem(row: DocumentRow): FileItem {
+    const extracted = (row as any).extracted_data || undefined;
     return {
       id: row.id,
       name: row.name,
@@ -956,16 +1105,98 @@ export class DocumentFolderService {
       clientId: row.client_id || undefined,
       caseId: row.case_id || undefined,
       folderId: row.folder_id || undefined,
-      type: row.type,
+      type: row.type as FileItem["type"],
       description: row.description || undefined,
       webViewLink: row.web_view_link || undefined,
       downloadLink: row.download_link || undefined,
       thumbnailLink: row.thumbnail_link || undefined,
-      extractedData: row.extracted_data || undefined,
-      extractionStatus: row.extracted_data ? 'completed' : 'pending',
+      extractedData: extracted,
+      extractionStatus: extracted ? 'completed' : 'pending',
       createdAt: row.created_at,
-      modifiedAt: row.modified_at || row.created_at,
+      modifiedAt: (row as any).updated_at || row.created_at,
       appProperties: (row.app_properties as Record<string, any>) || {},
     };
+  }
+
+  /**
+   * Salvar documento gerado (ex.: DOCX da Síntese) na pasta informada, sem extração/IA
+   */
+  static async saveGeneratedDocxToFolder(
+    folder: FolderItem,
+    fileBlob: Blob,
+    originalName: string,
+    displayName?: string
+  ): Promise<FileItem> {
+    return withErrorHandling(async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user?.user?.id) throw new Error("Usuário não autenticado");
+
+      // Nome único e caminho (inclui userId para atender às policies do Storage)
+      const timestamp = Date.now();
+      const sanitized = originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const uniqueName = `${timestamp}-${sanitized}`;
+
+      // Replicar lógica de caminho baseada na hierarquia
+      const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9-_]/g, "_");
+      let storagePath = `${user.user.id}/general/${uniqueName}`;
+      if (folder.kind === 'client') {
+        storagePath = `${user.user.id}/clients/${sanitize(folder.name)}/${uniqueName}`;
+      } else if (folder.kind === 'case') {
+        const clientPath = folder.path?.split('/')?.[0] || 'unknown_client';
+        storagePath = `${user.user.id}/clients/${sanitize(clientPath)}/cases/${sanitize(folder.name)}/${uniqueName}`;
+      } else if (folder.kind === 'subfolder') {
+        const pathParts = (folder.path?.split('/') || [folder.name]).map(sanitize).join('/');
+        storagePath = `${user.user.id}/folders/${pathParts}/${uniqueName}`;
+      }
+
+      const file = new File([fileBlob], uniqueName, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrl } = supabase.storage.from('documents').getPublicUrl(storagePath);
+      const { data: downloadUrl } = await supabase.storage.from('documents').createSignedUrl(storagePath, 3600);
+
+      // Garantir IDs de cliente/caso quando ausentes
+      let finalCaseId = folder.caseId;
+      let finalClientId = folder.clientId;
+      if (!finalCaseId && folder.kind === 'client') {
+        const def = await this.createDefaultCaseForClient(folder);
+        finalCaseId = def.id;
+        finalClientId = def.clientId;
+      } else if (!finalCaseId && !finalClientId) {
+        const def = await this.getOrCreateDefaultIds(user.user.id);
+        finalClientId = def.clientId;
+        finalCaseId = def.caseId;
+      }
+
+      const insertData: DocumentInsert = {
+        name: displayName || uniqueName,
+        mime_type: file.type,
+        size: file.size,
+        client_id: finalClientId!,
+        case_id: finalCaseId!,
+        folder_id: folder.id,
+        type: 'docx' as any,
+        doc_number: null,
+        supabase_storage_path: storagePath,
+        web_view_link: publicUrl.publicUrl,
+        download_link: downloadUrl?.signedUrl || publicUrl.publicUrl,
+        status: 'completed',
+        user_id: user.user.id,
+        app_properties: { category: 'generated' },
+      } as unknown as DocumentInsert;
+
+      const { data: documentRecord, error: dbError } = await supabase
+        .from('documents')
+        .insert(insertData)
+        .select()
+        .single();
+      if (dbError) throw dbError;
+
+      return this.mapDocumentRowToFileItem(documentRecord as unknown as DocumentRow);
+    }, 'DocumentFolderService.saveGeneratedDocxToFolder');
   }
 }

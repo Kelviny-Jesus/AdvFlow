@@ -1,12 +1,12 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Upload,
-  FileCheck,
   Settings,
   FolderOpen,
   Folder,
   ChevronLeft,
   ChevronRight,
+  Home as HomeIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
 const navigationItems = [
-  { title: "Uploads", url: "/", icon: Upload },
+  { title: "Home", url: "/", icon: HomeIcon },
+  { title: "Upload", url: "/upload", icon: Upload },
   { title: "Pastas", url: "/folders", icon: Folder },
-  { title: "Fatos", url: "/petitions", icon: FileCheck },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
@@ -35,12 +35,7 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const isActive = (path: string) => {
-    if (path === "/") {
-      return currentPath === "/";
-    }
-    return currentPath.startsWith(path);
-  };
+  const isActive = (path: string) => currentPath === path || currentPath.startsWith(path + "/");
 
   const getNavClasses = (path: string) => {
     const active = isActive(path);
@@ -91,16 +86,17 @@ export function AppSidebar() {
                     >
                       <SidebarMenuButton
                         asChild
+                        size="lg"
                         className="transition-all duration-200 hover:scale-[1.02] rounded-2xl"
                       >
                         <NavLink
                           to={item.url}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 ${getNavClasses(
+                          className={`flex items-center gap-3 rounded-2xl transition-all duration-200 ${getNavClasses(
                             item.url
                           )}`}
                         >
                           <item.icon className="w-5 h-5 flex-shrink-0" />
-                          <span className="font-medium">
+                          <span className="font-medium group-data-[collapsible=icon]:hidden truncate">
                             {item.title}
                           </span>
                         </NavLink>
@@ -119,7 +115,7 @@ export function AppSidebar() {
         variant="outline"
         size="icon"
         onClick={() => setOpen(!open)}
-        className="absolute -right-3 top-6 z-10 w-6 h-6 rounded-full border-2 bg-background shadow-lg hover:shadow-xl transition-all duration-200"
+        className="absolute right-2 top-6 z-10 w-6 h-6 rounded-full border-2 bg-background shadow-lg hover:shadow-xl transition-all duration-200"
       >
         <motion.div
           animate={{ rotate: open ? 0 : 180 }}

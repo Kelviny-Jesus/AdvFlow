@@ -58,7 +58,7 @@ Sistema completo de gestão de documentos jurídicos com IA integrada para extra
 
 ```bash
 git clone <SEU_REPOSITORIO>
-cd legal-streamline
+cd DocFlow
 ```
 
 ### 2. Instalar Dependências Node.js
@@ -232,7 +232,7 @@ VALUES ('documents', 'documents', true);
 ## 📁 Estrutura do Projeto
 
 ```
-legal-streamline/
+DocFlow/
 ├── src/
 │   ├── components/          # Componentes React
 │   ├── services/           # Serviços de negócio

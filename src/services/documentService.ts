@@ -300,7 +300,11 @@ export class DocumentService {
   /**
    * Gerar URL de download temporária
    */
-  static async getDownloadUrl(documentId: string, expiresIn: number = 3600): Promise<string> {
+  static async getDownloadUrl(
+    documentId: string,
+    expiresIn: number = 3600,
+    downloadFileName?: string
+  ): Promise<string> {
     const document = await this.getDocumentById(documentId);
     if (!document?.appProperties?.supabaseStoragePath) {
       throw new Error("Caminho do arquivo não encontrado");
@@ -308,7 +312,10 @@ export class DocumentService {
 
     const { data, error } = await supabase.storage
       .from("documents")
-      .createSignedUrl(document.appProperties.supabaseStoragePath, expiresIn);
+      .createSignedUrl(document.appProperties.supabaseStoragePath, expiresIn, {
+        // Se fornecido, força o header Content-Disposition para baixar com este nome
+        download: downloadFileName,
+      });
 
     if (error) throw error;
 

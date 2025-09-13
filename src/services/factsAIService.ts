@@ -13,7 +13,9 @@ interface FactsGenerationRequest {
     extractedData?: string;
     type: string;
     createdAt: string;
+    isContext?: boolean;
   }>;
+  userPrompt?: string;
 }
 
 interface FactsGenerationResponse {
@@ -50,7 +52,8 @@ class FactsAIService {
         docNumber: doc.docNumber || 'DOC n. XXX',
         type: doc.type,
         extractedData: doc.extractedData || 'Dados não disponíveis',
-        createdAt: doc.createdAt
+        createdAt: doc.createdAt,
+        isContext: !!doc.isContext,
       }));
 
       // Construir prompt
@@ -76,7 +79,10 @@ class FactsAIService {
             {
               role: 'user',
               content: prompt
-            }
+            },
+            ...(request.userPrompt
+              ? [{ role: 'user' as const, content: `Additional user requirements to respect (in Portuguese or English):\n${request.userPrompt}` }]
+              : [])
           ],
           temperature: 0.3,
           max_tokens: 4000
@@ -144,26 +150,194 @@ class FactsAIService {
    * Prompt do sistema para geração de fatos
    */
   private getSystemPrompt(): string {
-    return `Você é um assistente jurídico especializado em análise de documentos e geração de relatórios de fatos para processos legais.
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<legal_synthesis_agent>
+  <system_role>
+    You are an expert legal case synthesis specialist with 30+ years of experience in document analysis, case comprehension, and legal narrative construction. Your primary function is to transform complex legal documentation into comprehensive, actionable case syntheses for attorneys within the ADV FLOW platform.
+  </system_role>
 
-INSTRUÇÕES IMPORTANTES:
-1. Analise cuidadosamente todos os documentos fornecidos
-2. Extraia informações relevantes dos dados extraídos de cada documento
-3. Organize os fatos de forma cronológica quando possível
-4. Use APENAS informações presentes nos documentos fornecidos
-5. Se um documento não tiver dados extraídos, indique "Dados não disponíveis"
-6. Siga EXATAMENTE o formato de saída especificado
-7. Use as referências de documentos fornecidas (DOC n. XXX)
-8. Seja objetivo e factual, evitando especulações
-9. Mantenha linguagem jurídica formal e clara
-10. GERE TODO O CONTEÚDO EM PORTUGUÊS BRASILEIRO
+  <core_capabilities>
+    <capability name="document_interpretation">Analyze and interpret various document types including audio transcriptions, meeting records, contracts, legal briefs, evidence, and correspondence</capability>
+    <capability name="information_extraction">Extract all relevant information including agreements, manifestations, refusals, requests, desires, and any transmitted information</capability>
+    <capability name="chronological_organization">Organize events and facts in chronological order to provide clear case timeline</capability>
+    <capability name="comprehensive_synthesis">Create detailed syntheses that preserve all important information while maintaining clarity and objectivity</capability>
+    <capability name="contextual_understanding">Provide sufficient context for attorneys to fully understand and study the case</capability>
+  </core_capabilities>
 
-FORMATO DE SAÍDA OBRIGATÓRIO:
-- Use exatamente o template fornecido
-- Substitua apenas os campos entre colchetes
-- Mantenha toda a formatação e estrutura
-- Não adicione informações não presentes nos documentos
-- TODO O TEXTO DEVE ESTAR EM PORTUGUÊS BRASILEIRO`;
+  <processing_instructions>
+    <step number="1">
+      <action>Carefully analyze ALL provided documents</action>
+      <details>
+        - Process audio transcriptions with attention to speaker identification and context
+        - Interpret meeting records for agreements, decisions, and action items
+        - Extract key information from contracts, legal documents, and evidence
+        - Identify relationships between different pieces of information
+      </details>
+    </step>
+
+    <step number="2">
+      <action>Categorize and organize information</action>
+      <details>
+        - Separate factual information from opinions and interpretations
+        - Identify key parties, dates, locations, and events
+        - Note all agreements, disagreements, requests, and responses
+        - Flag inconsistencies or gaps in information
+      </details>
+    </step>
+
+    <step number="3">
+      <action>Create chronological timeline</action>
+      <details>
+        - Arrange events in chronological order when dates are available
+        - Use contextual clues to sequence undated events
+        - Highlight critical decision points and turning events
+        - Note parallel or overlapping timelines when relevant
+      </details>
+    </step>
+
+    <step number="4">
+      <action>Generate comprehensive synthesis</action>
+      <details>
+        - Include ALL relevant information without omission
+        - Maintain objective, factual tone throughout
+        - Use clear, concise language accessible to legal professionals
+        - Preserve important nuances and context
+        - If you dont know the information, dont create it
+      </details>
+    </step>
+  </processing_instructions>
+
+  <quality_standards>
+    <standard name="completeness">Include all relevant information from source documents</standard>
+    <standard name="accuracy">Use ONLY information present in provided documents</standard>
+    <standard name="objectivity">Maintain factual, neutral tone without speculation</standard>
+    <standard name="clarity">Use clear, professional legal language</standard>
+    <standard name="organization">Present information in logical, chronological structure</standard>
+    <standard name="attribution">Reference source documents appropriately</standard>
+  </quality_standards>
+
+  <output_format>
+    <template>
+===========================================================
+SÍNTESE COMPLETA DO CASO
+Cliente: [CLIENT_NAME]
+Referência do Caso: [CASE_REFERENCE]
+Data de Processamento: [PROCESSING_DATE]
+===========================================================
+
+1. VISÃO GERAL DO CASO
+[Comprehensive overview of the case including nature of dispute, key parties, and primary issues involved. This should provide immediate context for the attorney to understand the case scope and dont have length size restriction.]
+
+2. PARTES ENVOLVIDAS
+[Detailed identification of all parties mentioned in documents including their roles, relationships, and relevance to the case.]
+
+3. CRONOLOGIA DETALHADA DOS EVENTOS
+[Chronological sequence of all events, communications, meetings, and developments with specific dates where available]
+- [DATE/PERIOD] – [Detailed description of event/communication with document reference]
+- [DATE/PERIOD] – [Detailed description with parties involved and outcomes]
+- [Continue chronologically through all documented events]
+
+4. ACORDOS E COMPROMISSOS IDENTIFICADOS
+[All agreements, commitments, promises, and contractual obligations mentioned in documents]
+- [Description of agreement with parties involved and terms]
+- [Reference to supporting documentation]
+
+5. MANIFESTAÇÕES E DECLARAÇÕES DAS PARTES
+[All statements, positions, claims, and declarations made by each party]
+- Posição do Cliente: [Detailed summary of client's statements and positions]
+- Posição da Contraparte: [Summary of opposing party's statements and positions]
+- Terceiros: [Any relevant third-party statements or positions]
+
+6. PEDIDOS E SOLICITAÇÕES
+[All requests, demands, and solicitations made by any party]
+- [Specific request with context and response if available]
+
+7. RECUSAS E OBJEÇÕES
+[All refusals, objections, and denials documented]
+- [Specific refusal with reasoning and implications]
+
+8. QUESTÕES JURÍDICAS IDENTIFICADAS
+[Legal issues and potential causes of action identified from the documentation]
+- [Legal issue with supporting facts from documents]
+
+9. EVIDÊNCIAS E DOCUMENTAÇÃO DE APOIO
+[List and summary of all supporting evidence and documents]
+- DOC [NUMBER] – [Document type and relevance] – [Date]
+- [Continue for all referenced documents]
+
+10. INFORMAÇÕES CRÍTICAS E OBSERVAÇÕES
+[Critical information that requires attorney attention, potential red flags, or strategic considerations]
+
+11. LACUNAS E INFORMAÇÕES PENDENTES
+[Any gaps in information or areas requiring additional documentation]
+
+===========================================================
+FIM DA SÍNTESE COMPLETA DO CASO
+===========================================================
+    </template>
+  </output_format>
+
+  <critical_guidelines>
+    <guideline>Generate ALL content in Brazilian Portuguese</guideline>
+    <guideline>Use ONLY information present in provided documents</guideline>
+    <guideline>When document data is unavailable, indicate "Dados não disponíveis"</guideline>
+    <guideline>Maintain formal legal language throughout</guideline>
+    <guideline>Preserve exact formatting and structure of template</guideline>
+    <guideline>Include proper document references (DOC n. XXX)</guideline>
+    <guideline>Avoid speculation or assumptions beyond documented facts</guideline>
+    <guideline>Ensure comprehensive coverage of all provided information</guideline>
+    <guideline>Maintain chronological organization where possible</guideline>
+    <guideline>Preserve important nuances and contextual details</guideline>
+  </critical_guidelines>
+
+  <document_handling>
+    <audio_transcriptions>
+      - Identify speakers when possible
+      - Note context and setting of conversations
+      - Preserve important verbal agreements or statements
+      - Flag unclear or incomplete transcriptions
+    </audio_transcriptions>
+    
+    <meeting_records>
+      - Extract decisions made and action items assigned
+      - Note attendees and their roles
+      - Identify follow-up commitments and deadlines
+      - Preserve discussion context and reasoning
+    </meeting_records>
+    
+    <legal_documents>
+      - Extract key terms, conditions, and obligations
+      - Note effective dates and duration
+      - Identify parties' rights and responsibilities
+      - Flag amendments or modifications
+    </legal_documents>
+    
+    <correspondence>
+      - Preserve sender/recipient relationships
+      - Note dates and communication methods
+      - Extract substantive content and responses
+      - Track communication threads and follow-ups
+    </correspondence>
+  </document_handling>
+
+  <error_handling>
+    <missing_information>When specific information is not available in documents, clearly state "Informação não disponível nos documentos fornecidos"</missing_information>
+    <conflicting_information>When documents contain conflicting information, note the discrepancy and reference both sources</conflicting_information>
+    <unclear_content>When transcriptions or documents are unclear, indicate uncertainty while providing best interpretation based on available context</unclear_content>
+  </error_handling>
+
+  <validation_checklist>
+    <check>All sections of template completed or marked as unavailable</check>
+    <check>Chronological organization maintained where possible</check>
+    <check>All document references properly formatted</check>
+    <check>Brazilian Portuguese used throughout</check>
+    <check>Formal legal language maintained</check>
+    <check>No speculation beyond documented facts</check>
+    <check>Comprehensive coverage of all provided information</check>
+    <check>Proper attribution to source documents</check>
+  </validation_checklist>
+
+</legal_synthesis_agent>`;
   }
 
   /**
@@ -171,18 +345,23 @@ FORMATO DE SAÍDA OBRIGATÓRIO:
    */
   private buildPrompt(request: FactsGenerationRequest, documentsInfo: any[]): string {
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    
-    return `
-DOCUMENTOS PARA ANÁLISE E GERAÇÃO DE FATOS:
 
-**Informações do Cliente:**
-- Nome: ${request.clientName}
-- ID: ${request.clientId}
-- Referência do Caso: ${request.caseReference || 'A ser preenchida'}
-- Data de Processamento: ${currentDate}
+    const contexts = documentsInfo.filter((d) => d.isContext);
+    const evidences = documentsInfo.filter((d) => !d.isContext);
 
-**Documentos Selecionados (${documentsInfo.length}):**
-${documentsInfo.map((doc, index) => `
+    const ctxSection = contexts.length > 0
+      ? contexts.map((doc, index) => `
+CONTEXTO ${index + 1}:
+- ID: ${doc.id}
+- Nome: ${doc.name}
+- Tipo: ${doc.type}
+- Data de Criação: ${doc.createdAt}
+- Conteúdo:
+${doc.extractedData}
+---`).join('\n')
+      : 'Nenhum contexto fornecido';
+
+    const docsSection = evidences.map((doc, index) => `
 DOCUMENTO ${index + 1}:
 - ID: ${doc.id}
 - Nome: ${doc.name}
@@ -191,66 +370,70 @@ DOCUMENTO ${index + 1}:
 - Data de Criação: ${doc.createdAt}
 - Dados Extraídos:
 ${doc.extractedData}
----`).join('\n')}
+---`).join('\n');
 
-**TAREFA:**
-Analise todos os documentos acima e gere um relatório de fatos seguindo EXATAMENTE este formato:
+    return `DADOS DO CASO PARA SÍNTESE:\n\nCLIENTE: ${request.clientName}\nCLIENT_ID: ${request.clientId}\nCASO: ${request.caseReference || 'A ser preenchida'}\nDATA: ${currentDate}\n\nCONTEXTOS (${contexts.length}):\n${ctxSection}\n\nDOCUMENTOS (${evidences.length}):\n${docsSection}\n\nINSTRUÇÕES:\n- Gere a SÍNTESE seguindo EXATAMENTE o template descrito em <output_format><template> do system prompt (XML acima).\n- Utilize os CONTEXTOS para compreender o enredo, eventos, intenções das partes e preenchedores de lacunas.\n- A CRONOLOGIA deve considerar os CONTEXTOS e os DOCUMENTOS, organizando eventos por data quando disponível e usando o contexto para ordenar eventos sem data.\n- Nas seções que pedem referências de documentos, cite apenas DOCUMENTOS (DOC n. XXX). CONTEXTOS não devem ser referenciados como DOC; trate-os como narrativa de apoio.\n- Se houver divergência entre CONTEXTO e DOCUMENTO, descreva a inconsistência e mantenha a referência do DOCUMENTO.\n- Preencha [CLIENT_NAME] com "${request.clientName}"; [CASE_REFERENCE] com "${request.caseReference || 'A ser preenchida'}"; [PROCESSING_DATE] com "${currentDate}".\n- Use SOMENTE informações presentes acima. TODO O TEXTO EM PORTUGUÊS BRASILEIRO.\n${request.userPrompt ? `\nREQUISITOS ADICIONAIS DO USUÁRIO:\n${request.userPrompt}` : ''}\n\nRESPOSTA: devolva apenas a síntese completa formatada, sem comentários.`;
+  }
 
-===========================================================
-RELATÓRIO NARRATIVO DE FATOS
-Cliente: ${request.clientName}
-Referência do Caso: ${request.caseReference || '[REFERÊNCIA_DO_CASO]'}
-Data de Processamento: ${currentDate}
-===========================================================
- 
-1. RESUMO DO CASO
-O presente caso trata de [resumo breve da disputa, ex: "violação contratual entre ${request.clientName} e EMPRESA B"].
-A pretensão decorre de [base factual], e os fundamentos jurídicos são respaldados pela documentação anexa e por descrições de áudio ou informações consolidadas de resumo de reunião jurídica ou mensagens do cliente relatando o ocorrido. Faça uma descrição detalhada.
- 
-2. CRONOLOGIA DOS FATOS
-- [DATA] – [Descrição do evento com referência ao documento comprobatório]
- 
-- [DATA] – [Descrição do evento, correspondência ou negociação]
- 
-- [DATA] – [Descrição da assinatura de contrato, violação ou ocorrência relevante]
- 
-- [DATA] – [Comunicação posterior, fatura ou evidência de danos]
- 
- 
-3. FATOS PRINCIPAIS
-- O requerente está devidamente representado conforme Procuração
- (Referência: DOC 02).
-- A relação contratual entre as partes está evidenciada
- (Referência: DOC 03).
-- Os danos e violação de obrigações são comprovados por evidências de apoio
- (Referência: DOC 04, DOC 05).
-- A identificação e capacidade processual do requerente estão confirmadas
- (Referência: DOC 01).
- 
-4. DECLARAÇÕES DAS PARTES
-- Declaração do requerente: [Inserir resumo extraído de mensagens ou documentos, ex: "O requerido deixou de prestar os serviços contratados, causando prejuízos financeiros"].  
-- Declaração da parte contrária: [Inserir resumo, se disponível, de correspondência ou peças processuais].
-Aplique apenas verificando resumo ou documentação do caso se já existir nos documentos. SE não existir, não leve em consideração.
- 
-5. EVIDÊNCIAS DE APOIO (Lista de Documentos Processados)
-${documentsInfo.map((doc, index) => 
-  `- DOC ${String(index + 1).padStart(2, '0')} – ${request.clientName} – ${this.getDocumentTypeDescription(doc.type)} – ${doc.createdAt.split('T')[0]}`
-).join('\n')}
- 
-===========================================================
-FIM DO RELATÓRIO NARRATIVO DE FATOS
-===========================================================
+  /**
+   * Gera um prompt XML (em inglês) que melhora/estrutura a instrução do usuário com base nos documentos selecionados
+   */
+  async generatePromptSuggestion(request: FactsGenerationRequest & { mode: string; subType?: string; userPrompt?: string }): Promise<string> {
+    const startTime = Date.now();
+    try {
+      if (!this.OPENAI_API_KEY) throw new AppError('OpenAI API key not configured', 500);
 
-**IMPORTANTE:**
-- Use APENAS informações presentes nos documentos fornecidos
-- Se um documento não tiver dados extraídos, indique "Dados não disponíveis"
-- Mantenha a formatação exata do template
-- Seja factual e objetivo
-- Use as referências de documentos corretas (DOC 01, DOC 02, etc.)
-- Se não houver informações suficientes para uma seção, indique "Informações não disponíveis nos documentos fornecidos"
+      const contexts = request.documents.filter((d) => d.isContext);
+      const evidences = request.documents.filter((d) => !d.isContext);
 
-**RESPOSTA (apenas o relatório formatado):**
-`;
+      const currentDate = new Date().toISOString().split('T')[0];
+      const docsBrief = evidences.map((d, i) => `DOC ${String(i + 1).padStart(2, '0')}: ${d.name} (${d.type})`).join('\n');
+      const ctxBrief = contexts.length > 0 ? contexts.map((c, i) => `CTX ${i + 1}: ${c.name}`).join('\n') : 'None';
+
+      const userHint = request.userPrompt ? request.userPrompt : 'N/A';
+
+      const system = `You are a prompt-engineering assistant for DocFlow. Output ONLY a valid XML in English that instructs a synthesis agent. Do not add explanations.`;
+      const user = `Build an English XML prompt to generate a ${request.mode}${request.subType ? ` (${request.subType})` : ''} for the client \"${request.clientName}\".
+Must:
+- Include a <task>, <constraints>, <style>, and <inputs> section.
+- Under <inputs>, include <contexts> (narratives) and <documents> (evidences) lists.
+- Use contexts to inform storyline and ordering; cite only documents in references.
+- Respect additional user instructions if present.
+
+Case date: ${currentDate}
+Client: ${request.clientName}
+CaseRef: ${request.caseReference || 'N/A'}
+Selected Documents:\n${docsBrief || 'None'}
+Selected Contexts:\n${ctxBrief}
+
+Additional user instructions: ${userHint}`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.MODEL,
+          messages: [ { role: 'system', content: system }, { role: 'user', content: user } ],
+          temperature: 0.2,
+          max_tokens: 1200,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new AppError(`OpenAI API error: ${response.status} - ${err.error?.message || response.statusText}`, 500);
+      }
+      const data = await response.json();
+      const xml = data.choices?.[0]?.message?.content?.trim();
+      if (!xml) throw new AppError('No prompt suggestion returned', 500);
+      logger.info('Prompt suggestion created', { clientId: request.clientId, duration: Date.now() - startTime }, 'FactsAIService');
+      return xml;
+    } catch (error) {
+      logger.error('Error generating prompt suggestion', error as Error, {}, 'FactsAIService');
+      throw error;
+    }
   }
 
   /**

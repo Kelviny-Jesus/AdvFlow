@@ -15,3 +15,23 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+// Temporary dev auth: hardcoded user id
+export const DEV_USER_ID = "48b07eba-b1a8-456f-b124-c46a149eb62a";
+
+// Monkeypatch minimal auth methods used by the app so services can operate without real login
+// getUser
+(supabase.auth.getUser as unknown as () => Promise<any>) = async () => {
+  return { data: { user: { id: DEV_USER_ID } }, error: null };
+};
+
+// getSession (for potential callers)
+(supabase.auth.getSession as unknown as () => Promise<any>) = async () => {
+  return { data: { session: { user: { id: DEV_USER_ID } } }, error: null };
+};
+
+// onAuthStateChange (no-op subscription)
+(supabase.auth.onAuthStateChange as unknown as any) = (_cb: any) => ({ data: { subscription: { unsubscribe: () => {} } } });
+
+// signOut (no-op)
+(supabase.auth.signOut as unknown as () => Promise<any>) = async () => ({ error: null });

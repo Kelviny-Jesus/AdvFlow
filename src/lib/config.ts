@@ -132,7 +132,7 @@ export const appConfig = {
   urls: {
     documentation: 'https://docs.docflow-ai.com',
     support: 'https://support.docflow-ai.com',
-    github: 'https://github.com/docflow-ai/legal-streamline',
+    github: 'https://github.com/docflow-ai/DocFlow',
   },
 
   // Configurações de validação

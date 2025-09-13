@@ -114,23 +114,54 @@ export function SimpleAuth({ children }: SimpleAuthProps) {
     
     // Login com usuário de teste
     try {
+      const TEST_EMAIL = 'teste@docflow.com';
+      const TEST_PASSWORD = 'DevP@ssw0rd123!'; // senha mais forte para evitar políticas restritivas
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: 'teste@docflow.com',
-        password: '123456789',
+        email: TEST_EMAIL,
+        password: TEST_PASSWORD,
       });
 
       if (error) {
-        // Se não existe, criar
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: 'teste@docflow.com',
-          password: '123456789',
+        // Tratar casos comuns antes de tentar criar usuário
+        const message = (error as any)?.message ?? '';
+        const status = (error as any)?.status ?? 0;
+
+        // Se email não confirmado, instruir usuário
+        if (message.toLowerCase().includes('confirm') || message.toLowerCase().includes('email not confirmed')) {
+          toast({
+            title: 'Email não confirmado',
+            description: 'Verifique sua caixa de entrada para confirmar a conta antes de entrar.',
+            variant: 'destructive',
+          });
+          throw error;
+        }
+
+        // Evitar estouro de rate limit no signup
+        const lastSignupAt = Number(localStorage.getItem('docflow_last_quick_signup_ts') || '0');
+        const now = Date.now();
+        const cooldownMs = 70_000; // 70s de folga
+        const remainingMs = cooldownMs - (now - lastSignupAt);
+        if (remainingMs > 0) {
+          toast({
+            title: 'Aguarde um pouco para tentar novamente',
+            description: `Tente de novo em ${(Math.ceil(remainingMs / 1000))}s para evitar bloqueio de segurança.`,
+          });
+          throw error;
+        }
+
+        // Se credenciais inválidas (usuário pode não existir), tentar criar
+        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
         });
         
         if (signUpError) throw signUpError;
+        localStorage.setItem('docflow_last_quick_signup_ts', String(now));
         
         toast({
           title: "Usuário de teste criado",
-          description: "Use: teste@docflow.com / 123456789",
+          description: `Use: ${TEST_EMAIL} / ${TEST_PASSWORD}`,
         });
       } else {
         toast({
@@ -139,6 +170,14 @@ export function SimpleAuth({ children }: SimpleAuthProps) {
         });
       }
     } catch (error: any) {
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('too many requests') || msg.includes('only request this after')) {
+        toast({
+          title: 'Muitas tentativas em pouco tempo',
+          description: 'Espere cerca de 1 minuto e tente novamente.',
+          variant: 'destructive',
+        });
+      }
       logger.error('Quick auth error', error, undefined, 'SimpleAuth');
     } finally {
       setLoading(false);
