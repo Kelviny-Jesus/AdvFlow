@@ -5,7 +5,7 @@
 export const appConfig = {
   // Informações da aplicação
   app: {
-    name: 'DocFlow-AI',
+    name: 'AdvFlow',
     version: '2.0.0',
     description: 'Sistema de gestão de documentos jurídicos com IA',
   },
@@ -48,6 +48,7 @@ export const appConfig = {
       'audio/mpeg',
       'audio/wav',
       'audio/ogg',
+      'audio/opus',
       'video/mp4',
       'video/avi',
       'video/mov',

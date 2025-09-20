@@ -7,7 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { FileItem, FolderItem } from "@/types";
 import { withErrorHandling } from "@/lib/errors";
 import { logger, PerformanceMonitor } from "@/lib/logger";
-import { detectFileType } from "@/utils/fileUtils";
+import { detectFileType, getMimeTypeFromExtension } from "@/utils/fileUtils";
 import { extractionService } from "./extractionService";
 import { aiRenamingService } from "./aiRenamingService";
 import { imageConverterService } from "./imageConverterService";
@@ -136,21 +136,10 @@ export class DocumentFolderService {
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) throw new Error("Usuário não autenticado");
 
-      // 1. Converter JPG para PDF se necessário
-      const conversionResult = await this.convertJpgToPdfIfNeeded(file);
-      const fileToUpload = conversionResult.file;
-      const wasConverted = conversionResult.converted;
-      const originalFileName = conversionResult.originalName;
-
-      if (wasConverted) {
-        console.log('📄 Arquivo convertido de JPG para PDF:', originalFileName, '->', fileToUpload.name);
-        logger.info('File converted from JPG to PDF', {
-          originalName: originalFileName,
-          newName: fileToUpload.name,
-          originalType: file.type,
-          newType: fileToUpload.type
-        }, 'DocumentFolderService');
-      }
+      // 1. Usar sempre o arquivo original do usuário para upload
+      const fileToUpload = file;
+      const wasConverted = false;
+      const originalFileName = undefined;
 
       logger.info('Starting document upload to folder', {
         fileName: fileToUpload.name,
@@ -249,9 +238,6 @@ export class DocumentFolderService {
       console.log('📄 Tamanho:', documentData.size);
       console.log('📄 Tipo detectado:', documentData.type);
       console.log('🔄 Foi convertido?', wasConverted);
-      if (wasConverted) {
-        console.log('📄 Nome original:', originalFileName);
-      }
 
       const { data: documentRecord, error: dbError } = await supabase
         .from("documents")
@@ -273,8 +259,45 @@ export class DocumentFolderService {
       // 7. Mapear para FileItem
       const result = this.mapDocumentRowToFileItem(documentRecord);
 
-      // 8. Iniciar extração de dados (processo assíncrono)
-      this.processDocumentExtraction(result, publicUrl.publicUrl, fileToUpload.type)
+      // 7.1 Se for imagem/PDF, gerar PDF pesquisável via backend e subir como derivado (não exibido)
+      let extractionUrl = publicUrl.publicUrl;
+      let extractionMime = fileToUpload.type || getMimeTypeFromExtension(fileToUpload.name);
+      try {
+        const isPdf = extractionMime === 'application/pdf' || fileToUpload.name.toLowerCase().endsWith('.pdf');
+        const isImage = (extractionMime || '').startsWith('image/') || /\.(jpg|jpeg|png|webp|tif|tiff|heic|heif|bmp)$/i.test(fileToUpload.name);
+        if (isPdf || isImage) {
+          const { convertPdfToPdfViaBackend, convertImageToPdfViaBackend } = await import('@/services/ocrService');
+          const derivedPdf = isPdf
+            ? await convertPdfToPdfViaBackend(fileToUpload)
+            : await convertImageToPdfViaBackend(fileToUpload);
+
+          const baseDir = storagePath.split('/').slice(0, -1).join('/');
+          const ocrName = (fileToUpload.name.replace(/\.[^.]+$/i, '') || 'file') + '_vision_ocr.pdf';
+          const ocrPath = `${baseDir}/${Date.now()}-${ocrName}`;
+
+          const { error: ocrUploadError } = await supabase.storage
+            .from('documents')
+            .upload(ocrPath, derivedPdf, { cacheControl: '3600', upsert: false });
+          if (!ocrUploadError) {
+            const { data: ocrPublic } = supabase.storage.from('documents').getPublicUrl(ocrPath);
+            extractionUrl = ocrPublic.publicUrl;
+            extractionMime = 'application/pdf';
+            // salvar caminho do OCR como metadado
+            try {
+              await supabase
+                .from('documents')
+                .update({ app_properties: { ocr_pdf_path: ocrPath }, updated_at: new Date().toISOString() })
+                .eq('id', result.id)
+                .eq('user_id', user.user.id);
+            } catch {}
+          }
+        }
+      } catch (e) {
+        logger.error('Failed to create OCR PDF derivative', e as Error, { documentId: result.id }, 'DocumentFolderService');
+      }
+
+      // 8. Iniciar extração de dados (processo assíncrono) usando o PDF pesquisável se disponível
+      this.processDocumentExtraction(result, extractionUrl, extractionMime)
         .catch((error) => {
           logger.error('Failed to process document extraction', error as Error, { documentId: result.id }, 'DocumentFolderService');
         });
@@ -306,9 +329,8 @@ export class DocumentFolderService {
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) throw new Error("Usuário não autenticado");
 
-      // 1. Converter JPG para PDF se necessário
-      const conversionResult = await this.convertJpgToPdfIfNeeded(file);
-      const fileToUpload = conversionResult.file;
+      // 1. Usar arquivo original do usuário para upload (sem conversão)
+      const fileToUpload = file;
 
       // 2. Gerar nome único para o arquivo
       const timestamp = Date.now();

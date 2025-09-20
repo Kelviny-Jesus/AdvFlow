@@ -1,56 +1,46 @@
-# DocFlow-AI - Sistema de Gestão de Documentos Jurídicos
+# AdvFlow (antigo DocFlow-AI)
 
-Sistema completo de gestão de documentos jurídicos com IA integrada para extração de dados, renomeação automática e geração de narrativas de fatos.
+Sistema de gestão de documentos jurídicos com IA: extração OCR (Google Vision), renomeação por IA e geração de documentos (Síntese/Procuração/Contratos/Petições). Mantém o arquivo original no preview do usuário e cria um PDF pesquisável derivado para a extração.
 
 ## 🚀 Funcionalidades Principais
 
 ### 📁 Gestão de Documentos
-- **Upload inteligente** com conversão automática JPG → PDF
-- **Organização hierárquica** de pastas (Clientes, Casos, Subpastas)
-- **Visualização de documentos** integrada (PDF, imagens, áudio, vídeo)
-- **Navegação estilo Google Drive** com breadcrumbs
+- Upload inteligente (arquivo original mantido no preview)
+- Organização hierárquica de pastas (Clientes, Casos, Subpastas)
+- Visualização integrada (PDF, imagens, DOCX, áudio, vídeo)
+- Navegação com breadcrumbs
 
 ### 🤖 Inteligência Artificial
-- **Extração automática de dados** via n8n webhook
-- **Renomeação inteligente** com OpenAI GPT-4o-mini
-- **Numeração sequencial** automática por cliente
-- **Classificação de documentos** (RG, CPF, Contratos, etc.)
-- **Geração de narrativas de fatos** para petições
+- Extração automática de dados (Google Vision OCR → PDF pesquisável derivado)
+- Renomeação inteligente com OpenAI GPT-4o-mini
+- Numeração sequencial por cliente
+- Geração de documentos com prompt customizável e sugestão em XML (EN)
 
 ### 🔄 Integrações
-- **Supabase** (PostgreSQL + Storage + Auth)
-- **n8n** para processamento de documentos
-- **OpenAI** para IA e renomeação
-- **Python** para conversão de imagens
+- Supabase (PostgreSQL + Storage + Auth)
+- Google Cloud Vision + Storage (OCR)
+- OpenAI (renomeação/geração)
 
 ## 🛠️ Tecnologias Utilizadas
 
 ### Frontend
-- **React 18** com TypeScript
-- **Vite** para build e desenvolvimento
-- **Tailwind CSS** para estilização
-- **Shadcn/UI** para componentes
-- **React Query** para gerenciamento de estado
-- **Framer Motion** para animações
-- **jsPDF** para conversão de imagens
+- React 18 + TypeScript, Vite, Tailwind, Shadcn/UI, React Query, Framer Motion
+- FFmpeg.wasm para conversão `.opus` → `.mp3` (binários servidos de `public/ffmpeg/`)
 
-### Backend
-- **Supabase** (PostgreSQL + Storage + Auth)
-- **Row Level Security (RLS)** para segurança
-- **Python 3.13** com Pillow para processamento de imagens
+### Backend (dev)
+- Express (API OCR local)
+- Google Cloud Vision + Storage
+- Supabase (RLS habilitado)
 
 ### IA e Processamento
-- **OpenAI GPT-4o-mini** para renomeação e narrativas
-- **n8n** para extração de dados de documentos
-- **Webhooks** para comunicação assíncrona
+- OpenAI GPT‑4o‑mini para renomeação/narrativas
+- Vision OCR (imagens síncrono; PDFs assíncrono via GCS)
 
-## 📋 Pré-requisitos
+## 📋 Pré‑requisitos
 
-- **Node.js 18+** e npm
-- **Python 3.13+** com pip
-- **Conta Supabase** (gratuita)
-- **Chave OpenAI API** (paga)
-- **n8n webhook** configurado
+- Node.js 18+ e pnpm 8+
+- Conta Supabase (bucket `documents`)
+- Projeto GCP com Vision API habilitada e bucket GCS
 
 ## 🚀 Instalação e Configuração
 
@@ -61,30 +51,27 @@ git clone <SEU_REPOSITORIO>
 cd DocFlow
 ```
 
-### 2. Instalar Dependências Node.js
+### 2. Instalar Dependências
 
 ```bash
-# Instalar dependências principais
-npm install --legacy-peer-deps
-
-# Instalar dependências de desenvolvimento
-npm install @tanstack/react-query-devtools --save-dev --legacy-peer-deps
+pnpm i
+# pós-instalação copia @ffmpeg/core para public/ffmpeg
 ```
 
-### 3. Configurar Variáveis de Ambiente
+### 3. Variáveis de Ambiente
 
-Crie o arquivo `.env.local` na raiz do projeto:
+1) Frontend (`docflow/.env.local`)
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_OPENAI_API_KEY=...
+```
 
-```env
-# Supabase
-VITE_SUPABASE_URL=sua_url_do_supabase
-VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
-
-# OpenAI
-VITE_OPENAI_API_KEY=sk-sua-chave-openai
-
-# n8n Webhook
-VITE_N8N_WEBHOOK_URL=https://primary-production-f2257.up.railway.app/webhook/entrada-documentos
+2) Backend OCR (`docflow/.env`)
+```
+GOOGLE_APPLICATION_CREDENTIALS=/ABS/PATH/para/service-account.json
+GCS_BUCKET=seu-bucket-gcs
+PORT=3000
 ```
 
 ### 4. Configurar Supabase
@@ -119,28 +106,17 @@ CREATE POLICY "documents_authenticated_upload" ON storage.objects
 FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.role() = 'authenticated');
 ```
 
-### 5. Configurar Python (Opcional)
-
-Para conversão avançada de imagens:
+### 5. Executar (dev)
 
 ```bash
-# Executar script de instalação
-./install-python-deps.sh
+pnpm dev:full   # web + api OCR
 
-# Ou instalação manual
-cd python
-python3 -m venv .venv
-source .venv/bin/activate
-pip install Pillow
+# ou separados
+pnpm dev        # :8080
+pnpm dev:api    # :3000
 ```
 
-### 6. Iniciar Desenvolvimento
-
-```bash
-npm run dev
-```
-
-O sistema estará disponível em `http://localhost:8080`
+O sistema estará em `http://localhost:8080` (proxy `/api` → `:3000`).
 
 ## 📖 Guia de Uso
 
@@ -165,13 +141,13 @@ O sistema estará disponível em `http://localhost:8080`
 3. **Visualize documentos** clicando neles
 4. **Use breadcrumbs** para navegação
 
-### 3. Geração de Narrativas
+### 3. Geração (Síntese)
 
-1. **Acesse a aba "Fatos"**
-2. **Selecione uma pasta** com documentos
-3. **Escolha documentos** relevantes
-4. **Clique "Gerar Narrativa"**
-5. **Revise e salve** o conteúdo gerado
+1. Acesse a aba de geração
+2. Selecione documentos e contextos
+3. Escreva instruções adicionais (prompt)
+4. Use “Analisar DOCS e Sugerir prompt” (gera XML em inglês)
+5. Gere e salve
 
 ## 🔧 Configurações Avançadas
 
@@ -182,18 +158,10 @@ O sistema usa **GPT-4o-mini** para:
 - **Geração de narrativas** em português brasileiro
 - **Numeração sequencial** por cliente
 
-### n8n - Processamento de Documentos
+### OCR (Vision) – Endpoints (dev)
 
-Configure seu webhook n8n para receber:
-```json
-{
-  "fileUrl": "https://supabase.co/storage/...",
-  "mimeType": "application/pdf",
-  "fileName": "documento.pdf",
-  "documentId": "uuid",
-  "timestamp": "2025-01-01T00:00:00Z"
-}
-```
+- `POST /api/ocr/convert-image-to-pdf`
+- `POST /api/ocr/convert-pdf-to-pdf`
 
 ### Supabase - Políticas RLS
 
@@ -232,29 +200,29 @@ VALUES ('documents', 'documents', true);
 ## 📁 Estrutura do Projeto
 
 ```
-DocFlow/
+docflow/
 ├── src/
-│   ├── components/          # Componentes React
+│   ├── components/          # DocumentViewer com painel de texto extraído
 │   ├── services/           # Serviços de negócio
 │   ├── hooks/              # React Query hooks
 │   ├── types/              # Definições TypeScript
 │   ├── utils/              # Utilitários
 │   └── pages/              # Páginas da aplicação
-├── python/                 # Scripts Python
-│   ├── converter.py        # Conversor JPG→PDF
-│   ├── requirements.txt    # Dependências Python
-│   └── .venv/             # Ambiente virtual
+├── server/                 # API OCR (Express)
+│   ├── app.js
+│   └── routes/ocr.js
+├── public/ffmpeg/          # Binários FFmpeg (wasm)
 ├── supabase/              # Migrações e configurações
 └── public/                # Arquivos estáticos
 ```
 
 ## 🔄 Fluxo de Processamento
 
-1. **Upload** → Conversão JPG→PDF → Storage
-2. **Extração** → n8n webhook → Dados extraídos
-3. **Renomeação** → OpenAI → Nome inteligente
-4. **Organização** → Pastas hierárquicas
-5. **Narrativas** → IA → Conteúdo jurídico
+1. Upload (arquivo original salvo)
+2. OCR (gera PDF pesquisável derivado e usa na extração)
+3. Renomeação por IA
+4. Organização em pastas
+5. Geração de documentos
 
 ## 📊 Logs e Monitoramento
 
@@ -268,13 +236,13 @@ O sistema gera logs detalhados:
 
 ### Desenvolvimento
 ```bash
-npm run dev
+pnpm dev:full
 ```
 
 ### Produção
 ```bash
-npm run build
-npm run preview
+pnpm build
+pnpm preview
 ```
 
 ### Deploy no Supabase
@@ -297,4 +265,4 @@ Para suporte técnico ou dúvidas:
 
 ---
 
-**DocFlow-AI** - Transformando a gestão de documentos jurídicos com IA 🚀
+**AdvFlow** — Gestão de documentos jurídicos com IA 🚀

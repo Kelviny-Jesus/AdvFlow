@@ -147,6 +147,7 @@ class ExtractionService {
       'audio/mp3',         // MP3 (alternativo)
       'audio/wav',         // WAV
       'audio/ogg',         // OGG
+      'audio/opus',        // OPUS
       'audio/m4a',         // M4A
       'audio/aac',         // AAC
       'audio/flac',        // FLAC

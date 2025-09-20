@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { 
   FileText, 
   Download, 
@@ -28,14 +30,22 @@ import { DocumentService } from "@/services/documentService";
 interface DocumentViewerProps {
   document: FileItem;
   children: React.ReactNode;
+  siblingDocuments?: FileItem[];
+  initialIndex?: number;
 }
 
-export function DocumentViewer({ document, children }: DocumentViewerProps) {
+export function DocumentViewer({ document, children, siblingDocuments, initialIndex = 0 }: DocumentViewerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [newName, setNewName] = useState(document.name);
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  const currentDoc: FileItem = siblingDocuments && siblingDocuments.length > 0
+    ? siblingDocuments[Math.min(Math.max(currentIndex, 0), siblingDocuments.length - 1)]
+    : document;
+
+  const [newName, setNewName] = useState(currentDoc.name);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -74,47 +84,77 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
         if (lower.endsWith(`.${ext}`)) return name;
         return `${name}.${ext}`;
       };
-      const fileName = ensureExt(newName || document.name, document.type || 'pdf');
-      const url = await DocumentService.getDownloadUrl(document.id, 60 * 10, fileName);
+      const fileName = ensureExt(newName || currentDoc.name, currentDoc.type || 'pdf');
+      const url = await DocumentService.getDownloadUrl(currentDoc.id, 60 * 10, fileName);
       window.open(url, '_blank');
     } catch (e) {
       console.error(e);
-      if (document.downloadLink) window.open(document.downloadLink, '_blank');
+      if (currentDoc.downloadLink) window.open(currentDoc.downloadLink, '_blank');
     }
   };
 
   const handleOpenExternal = async () => {
     try {
-      const url = await DocumentService.getDownloadUrl(document.id, 60 * 10);
+      const url = await DocumentService.getDownloadUrl(currentDoc.id, 60 * 10);
       window.open(url, '_blank');
     } catch (e) {
       console.error(e);
-      if (document.webViewLink) window.open(document.webViewLink, '_blank');
+      if (currentDoc.webViewLink) window.open(currentDoc.webViewLink, '_blank');
     }
   };
 
   useEffect(() => {
     const fetchSigned = async () => {
       try {
-        const url = await DocumentService.getDownloadUrl(document.id, 60 * 10);
+        const url = await DocumentService.getDownloadUrl(currentDoc.id, 60 * 10);
         setSignedUrl(url);
       } catch (e) {
         console.error(e);
-        setSignedUrl(document.webViewLink || null);
+        setSignedUrl(currentDoc.webViewLink || null);
       }
     };
     if (isOpen) {
       fetchSigned();
     }
-  }, [isOpen, document.id, document.webViewLink]);
+  }, [isOpen, currentDoc.id, currentDoc.webViewLink]);
+
+  // Ao trocar de documento, sincronizar nome
+  useEffect(() => {
+    setNewName(currentDoc.name);
+    setSignedUrl(null);
+    setIsLoading(false);
+  }, [currentDoc.id]);
+
+  // Resetar índice ao abrir conforme item clicado
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentIndex(initialIndex);
+    }
+  }, [isOpen, initialIndex]);
+
+  // Navegação por teclado (setas esquerda/direita)
+  useEffect(() => {
+    if (!isOpen || !siblingDocuments || siblingDocuments.length <= 1) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentIndex((i) => Math.min(i + 1, siblingDocuments.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentIndex((i) => Math.max(i - 1, 0));
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, siblingDocuments]);
 
   const handleRename = async () => {
-    if (!newName.trim() || newName === document.name) {
+    if (!newName.trim() || newName === currentDoc.name) {
       setIsEditing(false);
       return;
     }
     try {
-      await DocumentService.updateDocument(document.id, { name: newName.trim() });
+      await DocumentService.updateDocument(currentDoc.id, { name: newName.trim() });
       window.location.reload();
     } catch (e) {
       console.error(e);
@@ -123,7 +163,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
 
   const handleDelete = async () => {
     try {
-      await DocumentService.deleteDocument(document.id);
+      await DocumentService.deleteDocument(currentDoc.id);
       window.location.reload();
     } catch (e) {
       console.error(e);
@@ -131,7 +171,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
   };
 
   const renderDocumentPreview = () => {
-    if (!document.webViewLink) {
+    if (!currentDoc.webViewLink) {
       return (
         <div className="flex flex-col items-center justify-center h-96 bg-muted rounded-lg">
           <File className="w-16 h-16 text-muted-foreground mb-4" />
@@ -143,24 +183,24 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
 
     // Log da URL para debug
     console.log('Document URLs:', {
-      webViewLink: document.webViewLink,
-      downloadLink: document.downloadLink,
-      type: document.type
+      webViewLink: currentDoc.webViewLink,
+      downloadLink: currentDoc.downloadLink,
+      type: currentDoc.type
     });
 
     // Para PDFs, usar iframe
-    if (document.type === 'pdf') {
+    if (currentDoc.type === 'pdf') {
       return (
-        <div className="relative h-96 bg-muted rounded-lg overflow-hidden">
+        <div className="relative h-full bg-muted rounded-lg overflow-hidden">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
           )}
           <iframe
-            src={`${(signedUrl || document.webViewLink) ?? ''}#toolbar=0`}
+            src={`${(signedUrl || currentDoc.webViewLink) ?? ''}#toolbar=0`}
             className="w-full h-full border-0"
-            title={document.name}
+            title={currentDoc.name}
             onLoad={() => setIsLoading(false)}
             onLoadStart={() => setIsLoading(true)}
             onError={(e) => {
@@ -186,10 +226,10 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
     }
 
     // Para DOCX, usar Office Online Viewer
-    if (document.type === 'docx') {
-      const viewerSrc = signedUrl || document.downloadLink || document.webViewLink || '';
+    if (currentDoc.type === 'docx') {
+      const viewerSrc = signedUrl || currentDoc.downloadLink || currentDoc.webViewLink || '';
       return (
-        <div className="relative h-96 bg-muted rounded-lg overflow-hidden">
+        <div className="relative h-full bg-muted rounded-lg overflow-hidden">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80">
               <Loader2 className="w-8 h-8 animate-spin" />
@@ -198,7 +238,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
           <iframe
             src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewerSrc)}`}
             className="w-full h-full border-0"
-            title={document.name}
+            title={currentDoc.name}
             onLoad={() => setIsLoading(false)}
             onError={(e) => {
               console.error('Office viewer error:', e);
@@ -210,17 +250,17 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
     }
 
     // Para imagens, mostrar diretamente
-    if (document.type === 'image' || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(document.type)) {
+    if (currentDoc.type === 'image' || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(currentDoc.type)) {
       return (
-        <div className="relative h-96 bg-muted rounded-lg overflow-hidden flex items-center justify-center">
+        <div className="relative h-full bg-muted rounded-lg overflow-hidden flex items-center justify-center">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
           )}
           <img
-            src={signedUrl || document.webViewLink}
-            alt={document.name}
+            src={signedUrl || currentDoc.webViewLink}
+            alt={currentDoc.name}
             className="max-w-full max-h-full object-contain"
             onLoad={() => setIsLoading(false)}
             onLoadStart={() => setIsLoading(true)}
@@ -232,10 +272,10 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
     // Para outros tipos, mostrar link para abrir externamente
     return (
       <div className="flex flex-col items-center justify-center h-96 bg-muted rounded-lg">
-        {getFileIcon(document.type)}
-        <p className="text-lg font-medium mt-4 mb-2">{document.name}</p>
+        {getFileIcon(currentDoc.type)}
+        <p className="text-lg font-medium mt-4 mb-2">{currentDoc.name}</p>
         <p className="text-muted-foreground mb-4">
-          Tipo: {document.type.toUpperCase()} • Tamanho: {formatFileSize(document.size)}
+          Tipo: {currentDoc.type.toUpperCase()} • Tamanho: {formatFileSize(currentDoc.size)}
         </p>
         <Button onClick={handleOpenExternal} className="flex items-center gap-2">
           <ExternalLink className="w-4 h-4" />
@@ -250,14 +290,14 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-[95vw] max-h-[92vh] overflow-auto pb-4">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            {getFileIcon(document.type)}
+            {getFileIcon(currentDoc.type)}
             <div className="flex-1 min-w-0">
               {!isEditing ? (
                 <div className="flex items-center gap-2">
-                  <p className="truncate">{document.name}</p>
+                  <p className="truncate">{currentDoc.name}</p>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}>
                     <Pencil className="w-3 h-3" />
                   </Button>
@@ -272,21 +312,21 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRename}>
                     <Check className="w-3 h-3" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setIsEditing(false); setNewName(document.name); }}>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setIsEditing(false); setNewName(currentDoc.name); }}>
                     <X className="w-3 h-3" />
                   </Button>
                 </div>
               )}
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="secondary" className="text-xs">
-                  {document.type.toUpperCase()}
+                  {currentDoc.type.toUpperCase()}
                 </Badge>
-                {document.appProperties && (document.appProperties as any).category === 'generated' && (
-                  <Badge variant="outline" className="text-xs">Documento Gerado pelo DocFlow</Badge>
+                {currentDoc.appProperties && (currentDoc.appProperties as any).category === 'generated' && (
+                  <Badge variant="outline" className="text-xs">Documento Gerado pelo AdvFlow</Badge>
                 )}
-                {document.docNumber && (
+                {currentDoc.docNumber && (
                   <Badge variant="outline" className="text-xs">
-                    {document.docNumber}
+                    {currentDoc.docNumber}
                   </Badge>
                 )}
               </div>
@@ -295,10 +335,54 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Preview do documento */}
-          <div>
-            {renderDocumentPreview()}
+          {/* Painel dividido: Texto extraído (esquerda) | Preview do documento (direita) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 rounded-lg border bg-background">
+            {/* Texto extraído */}
+            <div className="p-4 h-[36rem] flex flex-col border-b lg:border-b-0 lg:border-r">
+              <div className="mb-3">
+                <p className="text-sm font-semibold">Texto extraído - Google Vision OCR</p>
+                {currentDoc.name && (
+                  <p className="text-xs text-muted-foreground">Arquivo original: {currentDoc.name}</p>
+                )}
+              </div>
+              <div className="flex-1 border rounded bg-muted/20 overflow-hidden">
+                <ScrollArea className="h-full w-full max-w-full p-3">
+                  <pre className="w-full max-w-full whitespace-pre-wrap break-words break-all text-sm leading-6 overflow-x-auto">{(currentDoc.extractedData || 'Texto ainda não disponível para este documento.').trim()}</pre>
+                  <ScrollBar orientation="vertical" />
+                </ScrollArea>
+              </div>
+            </div>
+
+            {/* Preview do documento */}
+            <div className="relative h-[36rem] p-4">
+              {renderDocumentPreview()}
+              {siblingDocuments && siblingDocuments.length > 1 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full"
+                    onClick={() => setCurrentIndex((i) => Math.max(i - 1, 0))}
+                    disabled={currentIndex <= 0}
+                  >
+                    ‹
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full"
+                    onClick={() => setCurrentIndex((i) => Math.min(i + 1, siblingDocuments.length - 1))}
+                    disabled={currentIndex >= siblingDocuments.length - 1}
+                  >
+                    ›
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Divisor visual entre o painel principal e o rodapé */}
+          <Separator className="mt-2" />
 
           {/* Informações do documento */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
@@ -306,33 +390,33 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
               <div className="flex items-center gap-2 text-sm">
                 <Hash className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">ID:</span>
-                <span className="font-mono text-xs">{document.id.slice(0, 8)}...</span>
+                <span className="font-mono text-xs">{currentDoc.id.slice(0, 8)}...</span>
               </div>
               
               <div className="flex items-center gap-2 text-sm">
                 <File className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">Tamanho:</span>
-                <span>{formatFileSize(document.size)}</span>
+                <span>{formatFileSize(currentDoc.size)}</span>
               </div>
 
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <span className="font-medium">Criado:</span>
-                <span>{formatDate(document.createdAt)}</span>
+                <span>{formatDate(currentDoc.createdAt)}</span>
               </div>
             </div>
 
             <div className="space-y-2">
-              {document.description && (
+              {currentDoc.description && (
                 <div className="text-sm">
                   <span className="font-medium">Descrição:</span>
-                  <p className="text-muted-foreground mt-1">{document.description}</p>
+                  <p className="text-muted-foreground mt-1">{currentDoc.description}</p>
                 </div>
               )}
               
               <div className="text-sm">
                 <span className="font-medium">Tipo MIME:</span>
-                <span className="text-muted-foreground ml-2">{document.mimeType}</span>
+                <span className="text-muted-foreground ml-2">{currentDoc.mimeType}</span>
               </div>
             </div>
           </div>
@@ -356,7 +440,7 @@ export function DocumentViewer({ document, children }: DocumentViewerProps) {
               Download
             </Button>
             
-            {document.webViewLink && (
+            {currentDoc.webViewLink && (
               <Button
                 onClick={handleOpenExternal}
                 className="flex items-center gap-2"

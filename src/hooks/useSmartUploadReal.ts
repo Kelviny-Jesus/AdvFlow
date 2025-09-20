@@ -120,7 +120,6 @@ export function useSmartUploadReal() {
 
       logger.info('Starting upload process', { fileCount: pendingFiles.length }, 'useSmartUploadReal');
       PerformanceMonitor.startTimer('processUploads');
-      playActionSfx();
 
       const results: { success: number; errors: number } = { success: 0, errors: 0 };
 
@@ -138,24 +137,41 @@ export function useSmartUploadReal() {
             folderKind: targetFolder.kind 
           }, 'useSmartUploadReal');
           
-          // 2. Upload do arquivo usando o service integrado
+          // 2. Pré-processamento de mídia
+          let fileToUpload = uploadFile.file;
+          // 2a. Se imagem, converter via backend (Google Vision OCR) para PDF extraível
+          // Mantemos o arquivo original para upload (não converter imagens/PDFs aqui)
+
+          // 2b. Se arquivo for OPUS, converter para MP3 antes do upload
+          if (fileToUpload.type === 'audio/opus' || fileToUpload.name.toLowerCase().endsWith('.opus')) {
+            logger.info('Converting OPUS to MP3 before upload', { fileName: fileToUpload.name }, 'useSmartUploadReal');
+            try {
+              // Lazy import to avoid loading ffmpeg if não necessário
+              const { convertOpusToMp3 } = await import('@/lib/audioConverter');
+              fileToUpload = await convertOpusToMp3(fileToUpload);
+            } catch (e) {
+              logger.error('OPUS conversion failed', e as Error, undefined, 'useSmartUploadReal');
+            }
+          }
+
+          // 3. Upload do arquivo usando o service integrado
           logger.info('Uploading file using DocumentFolderService', { 
-            fileName: uploadFile.file.name,
+            fileName: fileToUpload.name,
             folderId: targetFolder.id,
             folderName: targetFolder.name,
-            size: uploadFile.file.size 
+            size: fileToUpload.size 
           }, 'useSmartUploadReal');
 
           const document = uploadFile.destination?.isContext
             ? await DocumentFolderService.uploadContextToFolder(
-                uploadFile.file,
+                fileToUpload,
                 targetFolder,
                 (progress) => {
                   updateFileStatus(uploadFile.id, { progress });
                 }
               )
             : await DocumentFolderService.uploadDocumentToFolder(
-                uploadFile.file,
+                fileToUpload,
                 targetFolder,
                 (progress) => {
                   updateFileStatus(uploadFile.id, { progress });
@@ -170,7 +186,7 @@ export function useSmartUploadReal() {
 
           results.success++;
           logger.info('File uploaded successfully', { 
-            fileName: uploadFile.file.name,
+            fileName: fileToUpload.name,
             documentId: document.id,
             folderId: targetFolder.id,
           }, 'useSmartUploadReal');
@@ -203,6 +219,7 @@ export function useSmartUploadReal() {
         description: `${results.success} arquivo(s) enviado(s) com sucesso. ${results.errors > 0 ? `${results.errors} erro(s).` : ''}`,
         variant: results.errors > 0 ? "destructive" : "default",
       });
+      try { playActionSfx(); } catch {}
 
       logger.info('Upload process completed', results, 'useSmartUploadReal');
     },

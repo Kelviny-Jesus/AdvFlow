@@ -268,6 +268,7 @@ export class FolderServiceReal {
       .from("documents")
       .select("*", { count: "exact", head: true })
       .eq("folder_id", row.id)
+      .eq("status", "completed")
       .eq("user_id", user.user.id);
 
     // Contar subpastas
@@ -305,6 +306,7 @@ export class FolderServiceReal {
         .from("documents")
         .select("*", { count: "exact", head: true })
         .eq("folder_id", folderId)
+        .eq("status", "completed")
         .eq("user_id", user.user.id);
 
       // Contar subpastas

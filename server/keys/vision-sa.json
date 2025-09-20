@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "linear-photon-472717-q3",
+  "private_key_id": "199f167be297786c88cc9c031e69d7f9548cc436",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDv4KKq8MGolDxb\nURnyyzZaeV8Jgx6Aza/wWimfjUBR/eMjx2+D6iPuq4QQxZpqDRzjqH0eK8vs4Ufr\noxllDW8EXN3l0fDePeVdrYsr3CnagPAWZ46BMX7yWa+yU67RasDrG8spwlVYE77j\nHQExhrEmSiunzRMGPeJrIPXoe7CXZe9azVDD/Vywl7ASayNMMSJTJ1elq3tGw0Lg\n5hiOGeeDRGjiwBpOptFgvuJCzJOgoaAzB26HTgvUy1g388LQm1aYrFe4yKgamGQQ\nSleNFLz6V+sq1jbeovVURnuXVMSvIFBAWUCW4+qlquTSmzCviWRgGkZbMRNDg03O\nmbLcxoUVAgMBAAECggEAHaTSFXPpSs7+4n4USdfpIKctInzMsTg6DObni+slzrwk\nbNCBrHir9hvGF1iEK6TxNAUnaSoaamywuaMPSViupohfd75JGP3nMXt33nS3y2Px\nx6MGjlqyiHqi5tPGn+SkcKmfosp8R4UxKtnzws4VaFj0KimCt1vAdmK9YPygJyVZ\nefwLdvGaRLPWXQy2Fy0mE3dcp4cJufyhYie8rBsQSJShpOOWX1SYjQ0nXhvYkDmi\n/4aAwCTXBvgwt0vtkgfgMp5r4O9RyB5WDHLtZqb6E6PZGLkFth2i2Qvq6ssmu5lS\nkm4ycjj4eabKcsmLkDloPlp3KE/TCvpPZKzu5of6ZQKBgQD9wy8Kp1whJ3lwHGC3\nbA8JrHM6Ymztw8tMt2BSmY5s9Gm4aZf1Ad4yK8O5NfGPZSn+tlqlokVw+wtRuSeT\nDMpPZ4+xliqaA1dbFtLoIUiuxctU9xu1EPlLmXeLXUNnwGDjVaQrLqeQBE9mAsc1\nBtQhOvzz5GqtaScLwLTKqYVicwKBgQDx/hv30S1pO3vHQCEkynEkW87yRzSGVeor\nHSDJ2R3g6y+1xGDoK8j5LUcif7ceh1J7va2xU1yFXNM4zRqcwOT3Tv6Kp+fWywqZ\nbwVE014In2OxdmNI1wIK36vy0+//wfTOsNbAPVxqObQflnVNsPV6BobAyS4IM8VI\nUDL+iHGwVwKBgQD56uDJfUoe3OGcqFYYTzQAMvbI6WaeQ9ZVF8SllNXQOGZmWJhv\nlAdhIfkAzz+4GcniMXXU6pu5SYU8Vz3CdTZKPZQnMd2DEQdXjoLoWt9aQTKf2z5O\ndQkQi3RQrOlVpQHG4vFsFeawz43iyZmnf7IriAzXpn3pi0YJLSDg91OGQQKBgCXN\nqpTWKp/r2PRRglv6/B3P8c5LbVsnBMPjcwHVVyOR2gwtN25NmMHEXv52sSalwS7v\nfLjc6vEyhRS0hdnDEIHJ513FySP26Br8CvirhF8Ydzx74Bq66+jC9Fuk3DM6G4JG\ngeXaMBuwFAFzQbP3VwHPDzICu5wwajtXu/+jVQ9VAoGBAOlRtEHCsGN6Kc4441zd\n9lQZ2R9gmWI7LOpnoljOo81SaNd76jBSkqrJc1BPaqLbuwgmNgnZBRJQOEhd9hba\nfm5F/obQHZlHOl91V81pO4USB9ouhtjbmGQfUv6Q5QvzDCqQ1P+L5vqJpSri7KE+\nIVr+IDXLfY4DordDAI7sfC6T\n-----END PRIVATE KEY-----\n",
+  "client_email": "vision-api@linear-photon-472717-q3.iam.gserviceaccount.com",
+  "client_id": "107943514402360258496",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/vision-api%40linear-photon-472717-q3.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

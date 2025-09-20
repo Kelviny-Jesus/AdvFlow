@@ -107,7 +107,6 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
   const handleGenerate = async () => {
     if (!selectedFolderId || selectedDocIds.length === 0 || !active) return;
     setGenerating(true);
-    playActionSfx();
     try {
       const selected = (docs as any[]).filter((d) => selectedDocIds.includes(d.id));
       const text = await factsAIService.generateFacts({
@@ -127,6 +126,7 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
         userPrompt: prompt,
       });
       setResult(text);
+      try { playActionSfx(); } catch {}
     } catch (e) {
       setResult("Erro ao gerar. Tente novamente.");
     } finally {
@@ -216,13 +216,13 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
       `<?xml version="1.0" encoding="UTF-8"?>` +
       `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/">` +
       `<dc:title>${esc(`Gerar ${modeLabel || 'Documento'}`)}</dc:title>` +
-      `<dc:creator>DocFlow</dc:creator>` +
+      `<dc:creator>AdvFlow</dc:creator>` +
       `</cp:coreProperties>`;
 
     const app =
       `<?xml version="1.0" encoding="UTF-8"?>` +
       `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">` +
-      `<Application>DocFlow</Application>` +
+      `<Application>AdvFlow</Application>` +
       `</Properties>`;
 
     const files: Record<string, Uint8Array> = {
@@ -260,8 +260,8 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
       "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`),
       "word/document.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs}<w:sectPr/></w:body></w:document>`),
       "word/styles.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`),
-      "docProps/core.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${esc(`Gerar ${modeLabel || 'Documento'}`)}</dc:title><dc:creator>DocFlow</dc:creator></cp:coreProperties>`),
-      "docProps/app.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>DocFlow</Application></Properties>`),
+      "docProps/core.xml": strToU8(`<?xml version=\"1.0\" encoding=\"UTF-8\"?><cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>${esc(`Gerar ${modeLabel || 'Documento'}`)}</dc:title><dc:creator>AdvFlow</dc:creator></cp:coreProperties>`),
+      "docProps/app.xml": strToU8(`<?xml version=\"1.0\" encoding=\"UTF-8\"?><Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\"><Application>AdvFlow</Application></Properties>`),
     };
     const zipped = zipSync(files, { level: 6 });
     return new Blob([zipped], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
@@ -298,18 +298,18 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
       variant="outline"
       onClick={onClick}
       className={cn(
-        "h-44 w-full flex flex-col items-center justify-center gap-3",
+        "h-[16.8rem] w-full flex flex-col items-center justify-center gap-5",
         "rounded-2xl border-2 border-teal-700/40 hover:border-teal-600"
       )}
     >
-      <Icon className="w-10 h-10 text-teal-600" />
-      <span className="text-lg font-semibold">{label}</span>
+      <Icon className="w-[7.5rem] h-[7.5rem] text-teal-600" strokeWidth={2.75} />
+      <span className="text-2xl font-semibold">{label}</span>
     </Button>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-7xl">
         <DialogHeader>
           <div className="relative">
             {active && (
@@ -329,7 +329,7 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
         </DialogHeader>
 
         {!active ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             <Card icon={PenLine} label="PROCURAÇÃO" onClick={() => setActive("procuracao")} />
             <Card icon={FileText} label="SÍNTESE" onClick={() => setActive("resumo")} />
             <Card icon={Handshake} label="CONTRATOS" onClick={() => setActive("contratos")} />

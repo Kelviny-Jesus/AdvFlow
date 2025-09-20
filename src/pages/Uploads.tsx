@@ -406,7 +406,7 @@ const Uploads = () => {
                               e.target.value = '';
                             }
                           }}
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.mp4,.zip,.txt,.md"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.ogg,.opus,.mp4,.zip,.txt,.md"
                         />
                       </motion.div>
                     </CardContent>

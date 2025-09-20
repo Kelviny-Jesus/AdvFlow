@@ -158,7 +158,7 @@ export function ExampleImprovedComponent() {
             type="file"
             multiple
             onChange={handleFileSelect}
-            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp3,.wav"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp3,.wav,.ogg,.opus"
           />
           
           {selectedFiles.length > 0 && (

@@ -98,6 +98,7 @@ export function detectFileType(fileName: string): FileItem['type'] {
     case 'mp3':
     case 'wav':
     case 'ogg':
+    case 'opus':
     case 'm4a':
       return 'audio';
     case 'mp4':
@@ -190,6 +191,8 @@ export function getMimeTypeFromExtension(fileName: string): string {
     gif: 'image/gif',
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    opus: 'audio/opus',
     mp4: 'video/mp4',
     avi: 'video/x-msvideo',
     zip: 'application/zip',

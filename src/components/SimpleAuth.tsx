@@ -77,7 +77,7 @@ export function SimpleAuth({ children }: SimpleAuthProps) {
 
         toast({
           title: "Login realizado!",
-          description: "Bem-vindo ao DocFlow-AI.",
+          description: "Bem-vindo ao AdvFlow.",
         });
       }
     } catch (error: any) {
@@ -200,7 +200,7 @@ export function SimpleAuth({ children }: SimpleAuthProps) {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">🚀 DocFlow-AI</CardTitle>
+            <CardTitle className="text-2xl">🚀 AdvFlow</CardTitle>
             <p className="text-gray-600">
               {isSignUp ? 'Criar conta' : 'Fazer login'} para continuar
             </p>

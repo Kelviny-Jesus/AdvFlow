@@ -90,25 +90,12 @@ export const queryClient = new QueryClient({
 
 // Event listeners para logging
 queryClient.getQueryCache().subscribe((event) => {
-  if (event?.type === 'queryAdded') {
-    logger.debug('Query added to cache', { 
-      queryKey: event.query.queryKey 
-    }, 'QueryClient');
-  }
-  
-  if (event?.type === 'queryRemoved') {
-    logger.debug('Query removed from cache', { 
-      queryKey: event.query.queryKey 
-    }, 'QueryClient');
-  }
+  // Simplificado para compatibilidade com @tanstack/react-query v5
+  logger.debug('Query cache event', event as any, 'QueryClient');
 });
 
 queryClient.getMutationCache().subscribe((event) => {
-  if (event?.type === 'mutationAdded') {
-    logger.debug('Mutation added', {
-      mutationKey: event.mutation.options.mutationKey
-    }, 'QueryClient');
-  }
+  logger.debug('Mutation cache event', event as any, 'QueryClient');
 });
 
 // Função para invalidar cache por padrão
@@ -134,15 +121,18 @@ export function getCacheStats() {
   const queryCache = queryClient.getQueryCache();
   const mutationCache = queryClient.getMutationCache();
   
+  const queries = queryCache.getAll();
   const stats = {
     queries: {
-      total: queryCache.getAll().length,
-      stale: queryCache.getAll().filter(q => q.isStale()).length,
-      fetching: queryCache.getAll().filter(q => q.isFetching()).length,
+      total: queries.length,
+      // Aproximação: considera "stale" tudo que não está em sucesso
+      stale: queries.filter((q) => q.state.status !== 'success').length,
+      // Em @tanstack/react-query v5, usar fetchStatus
+      fetching: queries.filter((q) => q.state.fetchStatus === 'fetching').length,
     },
     mutations: {
       total: mutationCache.getAll().length,
-      pending: mutationCache.getAll().filter(m => m.state.status === 'pending').length,
+      pending: mutationCache.getAll().filter((m) => m.state.status === 'pending').length,
     },
   };
   

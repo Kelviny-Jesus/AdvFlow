@@ -304,7 +304,7 @@ export function UploadModal({ open, onOpenChange }: UploadModalProps) {
                     addFiles(Array.from(e.target.files));
                   }
                 }}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.ogg"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp3,.wav,.ogg,.opus"
               />
             </div>
 

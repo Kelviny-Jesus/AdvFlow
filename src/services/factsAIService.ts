@@ -345,7 +345,7 @@ FIM DA SÍNTESE COMPLETA DO CASO
    */
   private buildPrompt(request: FactsGenerationRequest, documentsInfo: any[]): string {
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
+    
     const contexts = documentsInfo.filter((d) => d.isContext);
     const evidences = documentsInfo.filter((d) => !d.isContext);
 
@@ -392,7 +392,7 @@ ${doc.extractedData}
 
       const userHint = request.userPrompt ? request.userPrompt : 'N/A';
 
-      const system = `You are a prompt-engineering assistant for DocFlow. Output ONLY a valid XML in English that instructs a synthesis agent. Do not add explanations.`;
+      const system = `You are a prompt-engineering assistant for AdvFlow. Output ONLY a valid XML in English that instructs a synthesis agent. Do not add explanations.`;
       const user = `Build an English XML prompt to generate a ${request.mode}${request.subType ? ` (${request.subType})` : ''} for the client \"${request.clientName}\".
 Must:
 - Include a <task>, <constraints>, <style>, and <inputs> section.

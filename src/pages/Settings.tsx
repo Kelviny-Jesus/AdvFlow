@@ -34,11 +34,11 @@ const Settings = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <SidebarProvider>
-        <AppSidebar />
+          <AppSidebar />
         <SidebarInset className="bg-gradient-subtle">
           <Header searchQuery={searchQuery} onSearchChange={() => {}} showGenerateButton={false} />
-          
-          <main className="flex-1 p-6">
+            
+            <main className="flex-1 p-6">
               <div className="max-w-4xl mx-auto space-y-6">
                 <div>
                   <Button
@@ -48,8 +48,8 @@ const Settings = () => {
                     GERAR
                     <Wand2 className="w-4 h-4 ml-2" />
                   </Button>
-                </div>
-
+                      </div>
+                      
                 {/* Ações rápidas (Fontes, Espaçamento, RAG) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
@@ -66,8 +66,8 @@ const Settings = () => {
                       {item.label}
                     </Button>
                   ))}
-                </div>
-
+                      </div>
+                      
                 {/* Notificações e agenda */}
                 <Button
                   variant="outline"
@@ -232,7 +232,7 @@ const Settings = () => {
                 </Dialog>
                 {/* Antigas configurações removidas para novo layout */}
               </div>
-          </main>
+            </main>
           <GenerateModal open={openGenerate} onOpenChange={setOpenGenerate} />
         </SidebarInset>
       </SidebarProvider>
