@@ -61,6 +61,15 @@ const Folders = () => {
   const [navigationHistory, setNavigationHistory] = useState<Array<{id: string | null, name: string}>>([
     { id: null, name: "Início" }
   ]);
+  // Virtual root categories (folders)
+  const VIRTUAL = {
+    CLIENTS: 'vf_clients',
+    PROCESSES: 'vf_processes',
+    DOCUMENTS: 'vf_documents',
+    PUBLICATION: 'vf_publication',
+  } as const;
+
+  const isVirtual = (id: string | null | undefined): boolean => !!id && [VIRTUAL.CLIENTS, VIRTUAL.PROCESSES, VIRTUAL.DOCUMENTS, VIRTUAL.PUBLICATION].includes(id as any);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [openGenerate, setOpenGenerate] = useState(false);
@@ -70,7 +79,9 @@ const Folders = () => {
   const { data: clientsData = [] } = useClients();
   const folders: FolderItem[] = (foldersData as unknown as FolderItem[]) || [];
   const createClientMutation = useCreateClientWithFolderReal();
-  const { data: documentsData = [], isLoading: documentsLoading } = useDocumentsByFolder(currentFolderId);
+  // Avoid querying documents for virtual category IDs
+  const effectiveFolderId = isVirtual(currentFolderId) ? undefined : currentFolderId ?? undefined;
+  const { data: documentsData = [], isLoading: documentsLoading } = useDocumentsByFolder(effectiveFolderId);
   const [allDocsLoading, setAllDocsLoading] = useState(false);
   const [generatedDocs, setGeneratedDocs] = useState<FileItem[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
@@ -93,6 +104,18 @@ const Folders = () => {
       setCurrentFolderId(initialFolder);
     }
   }, [searchParams]);
+
+  // Se chegar por deep link, montar breadcrumb com "Início > Nome da pasta"
+  useEffect(() => {
+    const initialFolder = searchParams.get('folder');
+    if (!initialFolder) return;
+    // Se o histórico ainda não possui a pasta atual, adiciona
+    const lastId = navigationHistory[navigationHistory.length - 1]?.id || null;
+    if (lastId === initialFolder) return;
+    const folderName = folders.find(f => f.id === initialFolder)?.name || 'Pasta';
+    setNavigationHistory([{ id: null, name: 'Início' }, { id: initialFolder, name: folderName }]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, folders]);
 
   // Carregar backlog global (documentos gerados) quando na raiz
   useEffect(() => {
@@ -140,16 +163,27 @@ const Folders = () => {
   // Filtrar pastas baseado na pasta atual
   const currentFolders = useMemo(() => {
     if (currentFolderId === null) {
-      // Na raiz, mostrar apenas pastas principais (clientes)
-      return folders.filter(folder => folder.parentId === undefined || folder.parentId === null);
-    } else {
-      // Dentro de uma pasta, mostrar suas subpastas
-      return folders.filter(folder => folder.parentId === currentFolderId);
+      // Na raiz, não listamos pastas reais diretamente; exibimos categorias virtuais
+      return [] as FolderItem[];
     }
+    if (isVirtual(currentFolderId)) {
+      // Em "Clientes" virtual, listar as pastas raiz (clientes)
+      if (currentFolderId === VIRTUAL.CLIENTS) {
+        return folders
+          .filter(folder => folder.parentId === undefined || folder.parentId === null)
+          .sort((a, b) => a.name.localeCompare(b.name));
+      }
+      // Outras categorias virtuais não possuem subpastas reais
+      return [] as FolderItem[];
+    }
+    // Dentro de uma pasta real, mostrar subpastas
+    return folders
+      .filter(folder => folder.parentId === currentFolderId)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [folders, currentFolderId]);
 
   // Pasta atual
-  const currentFolder = currentFolderId ? folders.find(f => f.id === currentFolderId) : null;
+  const currentFolder = currentFolderId && !isVirtual(currentFolderId) ? folders.find(f => f.id === currentFolderId) : null;
 
   // Ações de pasta/documento
   const renameFolder = async (folder: FolderItem) => {
@@ -314,6 +348,41 @@ const Folders = () => {
     }
   };
 
+  // Contador de clientes na raiz (pastas principais)
+  const rootClientCount = useMemo(() => {
+    return folders.filter(folder => folder.parentId === undefined || folder.parentId === null).length;
+  }, [folders]);
+
+  // Ordenações de documentos
+  const sortedDocuments = useMemo(() => {
+    return (documents as FileItem[]).slice().sort((a, b) => a.name.localeCompare(b.name));
+  }, [documents]);
+  const sortedGeneratedDocs = useMemo(() => {
+    return generatedDocs.slice().sort((a, b) => a.name.localeCompare(b.name));
+  }, [generatedDocs]);
+
+  // Helpers de agrupamento A–Z
+  type Group<T> = { letter: string; items: T[] };
+  const normalizeName = (name: string) => (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const getInitial = (name: string) => {
+    const n = normalizeName(name).trim();
+    const ch = n.charAt(0).toUpperCase();
+    return ch.match(/[A-Z]/) ? ch : '#';
+  };
+  function groupByInitial<T>(items: T[], getName: (t: T) => string): Group<T>[] {
+    const map = new Map<string, T[]>();
+    for (const it of items) {
+      const letter = getInitial(getName(it));
+      if (!map.has(letter)) map.set(letter, []);
+      map.get(letter)!.push(it);
+    }
+    const letters = Array.from(map.keys()).sort();
+    return letters.map(letter => ({
+      letter,
+      items: map.get(letter)!.sort((a, b) => getName(a).localeCompare(getName(b)))
+    }));
+  }
+
   const getKindLabel = (kind: FolderItem['kind']) => {
     switch (kind) {
       case 'client':
@@ -393,7 +462,17 @@ const Folders = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <h1 className="text-3xl font-bold tracking-tight">
-                            {currentFolder ? currentFolder.name : "Pastas"}
+                            {currentFolder
+                              ? currentFolder.name
+                              : currentFolderId === VIRTUAL.CLIENTS
+                                ? 'Clientes'
+                                : currentFolderId === VIRTUAL.PROCESSES
+                                  ? 'Backlog de Processos'
+                                  : currentFolderId === VIRTUAL.DOCUMENTS
+                                    ? 'Backlog de Documentos'
+                                    : currentFolderId === VIRTUAL.PUBLICATION
+                                      ? 'Backlog de Publicação'
+                                      : 'Pastas'}
                           </h1>
                           {currentFolder && (
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => renameFolder(currentFolder)}>
@@ -402,10 +481,17 @@ const Folders = () => {
                           )}
                         </div>
                         <p className="text-muted-foreground">
-                          {currentFolder 
+                          {currentFolder && !isVirtual(currentFolderId)
                             ? `${currentFolders.length} pasta(s) • ${documents.length} documento(s)`
-                            : "Gerencie suas pastas de clientes e casos"
-                          }
+                            : currentFolderId === VIRTUAL.CLIENTS
+                              ? `${currentFolders.length} cliente(s)`
+                              : currentFolderId === VIRTUAL.DOCUMENTS
+                                ? `${generatedDocs.length} documento(s) gerado(s)`
+                                : currentFolderId === VIRTUAL.PROCESSES
+                                  ? 'Integração em desenvolvimento'
+                                  : currentFolderId === VIRTUAL.PUBLICATION
+                                    ? 'Nenhuma publicação pendente'
+                                    : 'Escolha uma categoria'}
                         </p>
                       </div>
                     </div>
@@ -519,30 +605,72 @@ const Folders = () => {
                   </div>
                 )}
 
-                {/* Folders Grid / Divisões */}
-                {!isLoading && currentFolders.length === 0 && documents.length === 0 && (
-                  <div className="text-center py-12">
-                    <Folder className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">
-                      {currentFolderId === null ? "Nenhuma pasta encontrada" : "Esta pasta está vazia"}
-                    </h3>
-                    <p className="text-muted-foreground mb-4">
-                      {currentFolderId === null 
-                        ? "Crie sua primeira pasta de cliente para começar."
-                        : "Esta pasta não contém subpastas ou documentos."
-                      }
-                    </p>
-                    {currentFolderId === null && (
-                      <Button onClick={() => setShowCreateForm(true)}>
-                        <FolderPlus className="w-4 h-4 mr-2" />
-                        Criar Pasta
-                      </Button>
-                    )}
+                {/* Categorias na raiz */}
+                {!isLoading && currentFolderId === null && (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-xl font-semibold mb-4">Categorias</h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {[{
+                            id: VIRTUAL.CLIENTS,
+                            name: 'Clientes',
+                            icon: <User className="w-6 h-6 text-blue-600" />,
+                            subtitle: `${rootClientCount} cliente(s)`
+                          }, {
+                            id: VIRTUAL.PROCESSES,
+                            name: 'Backlog de Processos',
+                            icon: <Clock className="w-6 h-6 text-amber-600" />,
+                            subtitle: 'Integração em desenvolvimento'
+                          }, {
+                            id: VIRTUAL.DOCUMENTS,
+                            name: 'Backlog de Documentos',
+                            icon: <Sparkles className="w-6 h-6 text-teal-700" />,
+                            subtitle: `${generatedDocs.length} documento(s) gerado(s)`
+                          }, {
+                            id: VIRTUAL.PUBLICATION,
+                            name: 'Backlog de Publicação',
+                            icon: <Download className="w-6 h-6 text-violet-600" />,
+                            subtitle: 'Publicações pendentes'
+                          }].map(cat => (
+                            <motion.div
+                              key={cat.id}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              whileHover={{ scale: 1.02 }}
+                              transition={{ duration: 0.2 }}
+                              className="min-w-[260px]"
+                            >
+                              <Card className="h-44 cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50" onClick={() => {
+                                setCurrentFolderId(cat.id);
+                                setNavigationHistory(prev => [...prev, { id: cat.id, name: cat.name }]);
+                              }}>
+                                <CardContent className="p-6 h-full flex flex-col justify-between">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                                        {cat.icon}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-lg truncate">{cat.name}</h3>
+                                      </div>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="text-sm text-muted-foreground">{cat.subtitle}</div>
+                                    <div className="text-xs text-muted-foreground">Clique para abrir</div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* Conteúdo da pasta atual - divisões */}
-                {!isLoading && (currentFolders.length > 0 || documents.length > 0) && (
+                {!isLoading && (currentFolderId !== null) && (
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentFolderId || 'root'}
@@ -552,125 +680,116 @@ const Folders = () => {
                       transition={{ duration: 0.2 }}
                       className="space-y-6"
                     >
-                      {/* Se na raiz: Divisão Clientes (pastas principais) */}
-                      {currentFolderId === null && currentFolders.length > 0 && (
+                      {/* Virtual: Clientes */}
+                      {currentFolderId === VIRTUAL.CLIENTS && currentFolders.length > 0 && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Clientes</h2>
-                          <ScrollArea className="w-full">
-                            <div className="flex gap-6 pb-2 w-max">
-                              {currentFolders.map((folder) => (
-                                <motion.div
-                                  key={folder.id}
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  whileHover={{ scale: 1.02 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="min-w-[320px] max-w-[340px]"
-                                >
-                                  <ContextMenu>
-                                    <ContextMenuTrigger>
-                                      <Card className="h-full cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50" onClick={() => navigateToFolder(folder)}>
-                                        <CardContent className="p-6">
-                                          <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                              {getKindIcon(folder.kind)}
-                                              <div className="flex-1 min-w-0 flex items-center gap-2">
-                                                <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameFolder(folder); }}>
-                                                  <Pencil className="w-4 h-4" />
-                                                </Button>
+                          {(() => {
+                            const groups = groupByInitial(currentFolders, f => f.name);
+                            return (
+                              <div className="space-y-6">
+                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                  {groups.map(g => (
+                                    <a key={g.letter} href={`#grp-clients-${g.letter}`} className="hover:text-foreground">{g.letter}</a>
+                                  ))}
+                                </div>
+                                {groups.map(g => (
+                                  <div key={g.letter} id={`grp-clients-${g.letter}`} className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-muted-foreground">{g.letter}</h3>
+                                    {g.items.map((folder) => (
+                                      <ContextMenu key={folder.id}>
+                                        <ContextMenuTrigger>
+                                          <Card className="hover:shadow-sm transition-all" onClick={() => navigateToFolder(folder)}>
+                                            <CardContent className="p-6">
+                                              <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-3">
+                                                  {getKindIcon(folder.kind)}
+                                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                    <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameFolder(folder); }}>
+                                                      <Pencil className="w-4 h-4" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                               </div>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                          </div>
-
-                                          <div className="space-y-2 text-sm text-muted-foreground">
-                                            <div className="flex items-center gap-2">
-                                              <Calendar className="w-3 h-3" />
-                                              <span>{formatDate(folder.createdAt)}</span>
-                                            </div>
-
-                                            {folder.path && (
-                                              <div className="text-xs bg-muted p-2 rounded font-mono truncate">
-                                                {folder.path}
+                                              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /><span>{formatDate(folder.createdAt)}</span></div>
+                                                <div className="text-right">{folder.documentsCount || 0} documentos • {folder.subfolderCount || 0} subpastas</div>
                                               </div>
-                                            )}
-                                          </div>
-
-                                          <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                                            <div className="text-xs text-muted-foreground">
-                                              {folder.documentsCount || 0} documentos
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                              {folder.subfolderCount || 0} subpastas
-                                            </div>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    </ContextMenuTrigger>
-                                    <ContextMenuContent>
-                                      <ContextMenuItem onClick={() => renameFolder(folder)}>Renomear</ContextMenuItem>
-                                      <ContextMenuItem onClick={() => deleteFolder(folder)} className="text-destructive">Excluir</ContextMenuItem>
-                                    </ContextMenuContent>
-                                  </ContextMenu>
-                                </motion.div>
-                              ))}
-                            </div>
-                            <ScrollBar orientation="horizontal" />
-                          </ScrollArea>
+                                            </CardContent>
+                                          </Card>
+                                        </ContextMenuTrigger>
+                                        <ContextMenuContent>
+                                          <ContextMenuItem onClick={() => renameFolder(folder)}>Renomear</ContextMenuItem>
+                                          <ContextMenuItem onClick={() => deleteFolder(folder)} className="text-destructive">Excluir</ContextMenuItem>
+                                        </ContextMenuContent>
+                                      </ContextMenu>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
-                      {/* Se dentro de uma pasta: manter seção de Subpastas */}
-                      {currentFolderId !== null && currentFolders.length > 0 && (
+                      {/* Dentro de uma pasta real: Subpastas */}
+                      {!isVirtual(currentFolderId) && currentFolders.length > 0 && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Subpastas</h2>
-                          <ScrollArea className="w-full">
-                            <div className="flex gap-6 pb-2 w-max">
-                              {currentFolders.map((folder) => (
-                                <motion.div key={folder.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }} className="min-w-[320px] max-w-[340px]">
-                                  <ContextMenu>
-                                    <ContextMenuTrigger>
-                                      <Card className="h-full cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50" onClick={() => navigateToFolder(folder)}>
-                                        <CardContent className="p-6">
-                                          <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                              {getKindIcon(folder.kind)}
-                                              <div className="flex-1 min-w-0 flex items-center gap-2">
-                                                <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameFolder(folder); }}>
-                                                  <Pencil className="w-4 h-4" />
-                                                </Button>
+                          {(() => {
+                            const groups = groupByInitial(currentFolders, f => f.name);
+                            return (
+                              <div className="space-y-6">
+                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                  {groups.map(g => (
+                                    <a key={g.letter} href={`#grp-subfolders-${g.letter}`} className="hover:text-foreground">{g.letter}</a>
+                                  ))}
+                                </div>
+                                {groups.map(g => (
+                                  <div key={g.letter} id={`grp-subfolders-${g.letter}`} className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-muted-foreground">{g.letter}</h3>
+                                    {g.items.map((folder) => (
+                                      <ContextMenu key={folder.id}>
+                                        <ContextMenuTrigger>
+                                          <Card className="hover:shadow-sm transition-all" onClick={() => navigateToFolder(folder)}>
+                                            <CardContent className="p-6">
+                                              <div className="flex items-start justify-between">
+                                                <div className="flex items-center gap-3">
+                                                  {getKindIcon(folder.kind)}
+                                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                    <h3 className="font-semibold text-lg truncate">{folder.name}</h3>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameFolder(folder); }}>
+                                                      <Pencil className="w-4 h-4" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                               </div>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                          </div>
-                                          <div className="space-y-2 text-sm text-muted-foreground">
-                                            <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /><span>{formatDate(folder.createdAt)}</span></div>
-                                            {folder.path && (<div className="text-xs bg-muted p-2 rounded font-mono truncate">{folder.path}</div>)}
-                                          </div>
-                                          <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                                            <div className="text-xs text-muted-foreground">{folder.documentsCount || 0} documentos</div>
-                                            <div className="text-xs text-muted-foreground">{folder.subfolderCount || 0} subpastas</div>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    </ContextMenuTrigger>
-                                    <ContextMenuContent>
-                                      <ContextMenuItem onClick={() => renameFolder(folder)}>Renomear</ContextMenuItem>
-                                      <ContextMenuItem onClick={() => deleteFolder(folder)} className="text-destructive">Excluir</ContextMenuItem>
-                                    </ContextMenuContent>
-                                  </ContextMenu>
-                                </motion.div>
-                              ))}
-                            </div>
-                            <ScrollBar orientation="horizontal" />
-                          </ScrollArea>
+                                              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                <div className="flex items-center gap-2"><Calendar className="w-3 h-3" /><span>{formatDate(folder.createdAt)}</span></div>
+                                                <div className="text-right">{folder.documentsCount || 0} documentos • {folder.subfolderCount || 0} subpastas</div>
+                                              </div>
+                                            </CardContent>
+                                          </Card>
+                                        </ContextMenuTrigger>
+                                        <ContextMenuContent>
+                                          <ContextMenuItem onClick={() => renameFolder(folder)}>Renomear</ContextMenuItem>
+                                          <ContextMenuItem onClick={() => deleteFolder(folder)} className="text-destructive">Excluir</ContextMenuItem>
+                                        </ContextMenuContent>
+                                      </ContextMenu>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
-                      {/* Backlog de Processos - placeholder (integração futura) */}
-                      {currentFolderId === null && (
+                      {/* Virtual: Backlog de Processos */}
+                      {currentFolderId === VIRTUAL.PROCESSES && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Backlog de Processos</h2>
                           <Card>
@@ -681,139 +800,128 @@ const Folders = () => {
                         </div>
                       )}
 
-                      {/* Documentos na pasta atual */}
-                      {documents.length > 0 && (
+                      {/* Documentos na pasta real atual */}
+                      {!isVirtual(currentFolderId) && sortedDocuments.length > 0 && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Documentos</h2>
-                          <ScrollArea className="w-full">
-                            <div className="flex gap-4 pb-2 w-max">
-                              {documents.map((document, idx) => (
-                                <motion.div
-                                  key={document.id}
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  whileHover={{ scale: 1.02 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="min-w-[300px] max-w-[320px]"
-                                >
-                                  <ContextMenu>
-                                    <ContextMenuTrigger>
-                                      <DocumentViewer document={document} siblingDocuments={documents} initialIndex={idx}>
-                                        <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
-                                          <CardContent className="p-4">
-                                            <div className="flex items-start gap-3 mb-3">
-                                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                                <FileText className="w-4 h-4 text-blue-600" />
-                                              </div>
-                                              <div className="flex-1 min-w-0 flex items-center gap-2">
-                                                <h3 className="font-medium text-sm truncate">{document.name}</h3>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameDocument(document); }}>
-                                                  <Pencil className="w-3 h-3" />
-                                                </Button>
-                                              </div>
-                                            </div>
-                                            
-                                            {document.appProperties && (document.appProperties as any).category === 'generated' && (
-                                              <div className="mb-2">
-                                                <Badge variant="outline" className="text-[10px]">Documento Gerado pelo AdvFlow</Badge>
-                                              </div>
-                                            )}
-
-                                            <div className="space-y-1 text-xs text-muted-foreground">
-                                              <div className="flex justify-between">
-                                                <span>Tamanho:</span>
-                                                <span>{formatFileSize(document.size)}</span>
-                                              </div>
-                                              <div className="flex justify-between">
-                                                <span>Tipo:</span>
-                                                <span className="uppercase">{document.type}</span>
-                                              </div>
-                                              <div className="flex justify-between">
-                                                <span>Criado:</span>
-                                                <span>{formatDate(document.createdAt)}</span>
-                                              </div>
-                                            </div>
-
-                                            <div className="mt-2 pt-2 border-t">
-                                              <ExtractionStatus document={document} />
-                                            </div>
-
-                                            <div className="mt-2 pt-2 border-t flex items-center justify-center">
-                                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                <FileText className="w-3 h-3" />
-                                                Clique para visualizar
-                                              </span>
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                      </DocumentViewer>
-                                    </ContextMenuTrigger>
-                                    <ContextMenuContent>
-                                      <ContextMenuItem onClick={() => renameDocument(document)}>Renomear</ContextMenuItem>
-                                      <ContextMenuItem onClick={() => deleteDocument(document)} className="text-destructive">Excluir</ContextMenuItem>
-                                    </ContextMenuContent>
-                                  </ContextMenu>
-                                </motion.div>
-                              ))}
-                            </div>
-                            <ScrollBar orientation="horizontal" />
-                          </ScrollArea>
+                          {(() => {
+                            const groups = groupByInitial(sortedDocuments, d => d.name);
+                            return (
+                              <div className="space-y-6">
+                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                  {groups.map(g => (
+                                    <a key={g.letter} href={`#grp-docs-${g.letter}`} className="hover:text-foreground">{g.letter}</a>
+                                  ))}
+                                </div>
+                                {groups.map((g, gi) => (
+                                  <div key={g.letter} id={`grp-docs-${g.letter}`} className="space-y-4">
+                                    <h3 className="text-sm font-semibold text-muted-foreground">{g.letter}</h3>
+                                    {g.items.map((document, idx) => (
+                                      <ContextMenu key={document.id}>
+                                        <ContextMenuTrigger>
+                                          <DocumentViewer document={document} siblingDocuments={sortedDocuments} initialIndex={idx}>
+                                            <Card className="hover:shadow-sm transition-shadow cursor-pointer">
+                                              <CardContent className="p-4">
+                                                <div className="flex items-start gap-3 mb-3">
+                                                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                    <FileText className="w-4 h-4 text-blue-600" />
+                                                  </div>
+                                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                    <h3 className="font-medium text-sm truncate">{document.name}</h3>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); renameDocument(document); }}>
+                                                      <Pencil className="w-3 h-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                                <div className="space-y-1 text-xs text-muted-foreground">
+                                                  <div className="flex justify-between"><span>Tamanho:</span><span>{formatFileSize(document.size)}</span></div>
+                                                  <div className="flex justify-between"><span>Tipo:</span><span className="uppercase">{document.type}</span></div>
+                                                  <div className="flex justify-between"><span>Criado:</span><span>{formatDate(document.createdAt)}</span></div>
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t">
+                                                  <ExtractionStatus document={document} />
+                                                </div>
+                                              </CardContent>
+                                            </Card>
+                                          </DocumentViewer>
+                                        </ContextMenuTrigger>
+                                        <ContextMenuContent>
+                                          <ContextMenuItem onClick={() => renameDocument(document)}>Renomear</ContextMenuItem>
+                                          <ContextMenuItem onClick={() => deleteDocument(document)} className="text-destructive">Excluir</ContextMenuItem>
+                                        </ContextMenuContent>
+                                      </ContextMenu>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 
-                      {/* Backlog de Documentos (gerados pelo sistema) - catálogo horizontal */}
-                      {currentFolderId === null && (
+                      {/* Virtual: Backlog de Documentos (gerados pelo sistema) */}
+                      {currentFolderId === VIRTUAL.DOCUMENTS && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Backlog de Documentos</h2>
                           {allDocsLoading && (
                             <div className="flex items-center justify-center h-24 text-muted-foreground">Carregando...</div>
                           )}
-                          {!allDocsLoading && generatedDocs.length === 0 && (
+                          {!allDocsLoading && sortedGeneratedDocs.length === 0 && (
                             <div className="text-sm text-muted-foreground">Nenhum documento gerado encontrado.</div>
                           )}
-                          {!allDocsLoading && generatedDocs.length > 0 && (
-                            <ScrollArea className="w-full">
-                              <div className="flex gap-4 pb-2 w-max">
-                                {generatedDocs.map((document) => (
-                                  <motion.div key={document.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ scale: 1.02 }} transition={{ duration: 0.2 }} className="min-w-[320px] max-w-[340px]">
-                                    <ContextMenu>
-                                      <ContextMenuTrigger>
-                                        <DocumentViewer document={document}>
-                                          <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
-                                            <CardContent className="p-4">
-                                              <div className="flex items-start gap-3 mb-3">
-                                                <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
-                                                  <Sparkles className="w-4 h-4 text-teal-700" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <h3 className="font-medium text-sm truncate">{document.name}</h3>
-                                                  <Badge variant="outline" className="text-[10px] mt-1">Documento Gerado pelo AdvFlow</Badge>
-                                                </div>
-                                              </div>
-                                              <div className="space-y-1 text-xs text-muted-foreground">
-                                                <div className="flex justify-between"><span>Cliente</span><span>{clientNameById.get(document.clientId) || document.clientId}</span></div>
-                                                <div className="flex justify-between"><span>Criado</span><span>{formatDate(document.createdAt)}</span></div>
-                                              </div>
-                                            </CardContent>
-                                          </Card>
-                                        </DocumentViewer>
-                                      </ContextMenuTrigger>
-                                      <ContextMenuContent>
-                                        <ContextMenuItem onClick={() => renameDocument(document)}>Renomear</ContextMenuItem>
-                                        <ContextMenuItem onClick={() => deleteDocument(document)} className="text-destructive">Excluir</ContextMenuItem>
-                                      </ContextMenuContent>
-                                    </ContextMenu>
-                                  </motion.div>
-                                ))}
-                              </div>
-                              <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
+                          {!allDocsLoading && sortedGeneratedDocs.length > 0 && (
+                            (() => {
+                              const groups = groupByInitial(sortedGeneratedDocs, d => d.name);
+                              return (
+                                <div className="space-y-6">
+                                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                    {groups.map(g => (
+                                      <a key={g.letter} href={`#grp-gen-${g.letter}`} className="hover:text-foreground">{g.letter}</a>
+                                    ))}
+                                  </div>
+                                  {groups.map(g => (
+                                    <div key={g.letter} id={`#grp-gen-${g.letter}`.replace('##', '#')} className="space-y-4">
+                                      <h3 className="text-sm font-semibold text-muted-foreground">{g.letter}</h3>
+                                      {g.items.map((document) => (
+                                        <ContextMenu key={document.id}>
+                                          <ContextMenuTrigger>
+                                            <DocumentViewer document={document}>
+                                              <Card className="hover:shadow-sm transition-shadow cursor-pointer">
+                                                <CardContent className="p-4">
+                                                  <div className="flex items-start gap-3 mb-3">
+                                                    <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+                                                      <Sparkles className="w-4 h-4 text-teal-700" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                      <h3 className="font-medium text-sm truncate">{document.name}</h3>
+                                                      <Badge variant="outline" className="text-[10px] mt-1">Documento Gerado pelo AdvFlow</Badge>
+                                                    </div>
+                                                  </div>
+                                                  <div className="space-y-1 text-xs text-muted-foreground">
+                                                    <div className="flex justify-between"><span>Cliente</span><span>{clientNameById.get(document.clientId) || document.clientId}</span></div>
+                                                    <div className="flex justify-between"><span>Criado</span><span>{formatDate(document.createdAt)}</span></div>
+                                                  </div>
+                                                </CardContent>
+                                              </Card>
+                                            </DocumentViewer>
+                                          </ContextMenuTrigger>
+                                          <ContextMenuContent>
+                                            <ContextMenuItem onClick={() => renameDocument(document)}>Renomear</ContextMenuItem>
+                                            <ContextMenuItem onClick={() => deleteDocument(document)} className="text-destructive">Excluir</ContextMenuItem>
+                                          </ContextMenuContent>
+                                        </ContextMenu>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()
                           )}
                         </div>
                       )}
 
-                      {/* Backlog de Publicação (placeholder) */}
-                      {currentFolderId === null && (
+                      {/* Virtual: Backlog de Publicação (placeholder) */}
+                      {currentFolderId === VIRTUAL.PUBLICATION && (
                         <div>
                           <h2 className="text-xl font-semibold mb-4">Backlog de Publicação</h2>
                           <div className="text-sm text-muted-foreground">Nenhuma publicação pendente.</div>

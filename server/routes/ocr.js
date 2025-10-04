@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import fetch from 'node-fetch';
 import { promises as fs } from 'fs';
+import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -13,13 +14,26 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// Garantir GOOGLE_APPLICATION_CREDENTIALS apontando para a chave local por padrão
+try {
+  const defaultSaPath = path.resolve(__dirname, '../keys/vision-sa.json');
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || !existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    if (existsSync(defaultSaPath)) {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultSaPath;
+      // eslint-disable-next-line no-console
+      console.log('[OCR] Using default service account at', defaultSaPath);
+    }
+  }
+} catch {}
+
 const upload = multer({
   dest: '/tmp/uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 },
+  // Aumentar limite para acomodar imagens maiores
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
-    cb(new Error('Tipo de arquivo não suportado. Use JPG, PNG ou WebP.'));
+    // Aceitar qualquer imagem suportada pelo Vision (jpeg, png, webp, tiff, heic, heif, bmp, gif, etc.)
+    if ((file.mimetype || '').toLowerCase().startsWith('image/')) return cb(null, true);
+    cb(new Error('Tipo de arquivo não suportado. Envie uma imagem.'));
   },
 });
 

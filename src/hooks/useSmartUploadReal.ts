@@ -123,12 +123,30 @@ export function useSmartUploadReal() {
 
       const results: { success: number; errors: number } = { success: 0, errors: 0 };
 
+      // Cache de destinos resolvidos (evita criar uma pasta por arquivo)
+      const resolvedDestinations = new Map<string, FolderItem>();
+      const buildDestKey = (d: UploadDestination) => {
+        return JSON.stringify({
+          type: d.type,
+          folderId: d.folderId || null,
+          clientName: d.clientName || null,
+          subfolderName: d.subfolderName || null,
+          parentFolderId: d.parentFolderId || null,
+          isContext: d.isContext || false,
+        });
+      };
+
       for (const uploadFile of pendingFiles) {
         try {
           updateFileStatus(uploadFile.id, { status: "processing" });
 
           // 1. Resolver destino (criar pasta se necessário)
-          const targetFolder = await resolveDestination(uploadFile.destination);
+          const cacheKey = buildDestKey(uploadFile.destination);
+          let targetFolder = resolvedDestinations.get(cacheKey);
+          if (!targetFolder) {
+            targetFolder = await resolveDestination(uploadFile.destination);
+            resolvedDestinations.set(cacheKey, targetFolder);
+          }
           setLastTargetFolder(targetFolder);
           
           logger.info('Target folder resolved', { 
@@ -251,7 +269,8 @@ export function useSmartUploadReal() {
     addFiles,
     removeFile,
     clearAll,
-    processUploads: processUploadsMutation.mutate,
+    // Expor mutateAsync para permitir await até a conclusão real do upload
+    processUploads: processUploadsMutation.mutateAsync,
     
     // Status
     isUploading: processUploadsMutation.isPending,

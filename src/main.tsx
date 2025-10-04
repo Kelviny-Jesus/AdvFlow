@@ -22,6 +22,8 @@ logger.info("🚀 Aplicação iniciando", envConfig, "Main");
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
     <App />
-    {import.meta.env.MODE === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+    {import.meta.env.VITE_SHOW_RQ_DEVTOOLS === 'true' && (
+      <ReactQueryDevtools initialIsOpen={false} />
+    )}
   </QueryClientProvider>
 );

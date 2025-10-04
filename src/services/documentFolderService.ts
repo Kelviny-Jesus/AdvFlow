@@ -266,7 +266,7 @@ export class DocumentFolderService {
         const isPdf = extractionMime === 'application/pdf' || fileToUpload.name.toLowerCase().endsWith('.pdf');
         const isImage = (extractionMime || '').startsWith('image/') || /\.(jpg|jpeg|png|webp|tif|tiff|heic|heif|bmp)$/i.test(fileToUpload.name);
         if (isPdf || isImage) {
-          const { convertPdfToPdfViaBackend, convertImageToPdfViaBackend } = await import('@/services/ocrService');
+          const { convertPdfToPdfViaBackend, convertImageToPdfViaBackend, extractTextViaBackend } = await import('@/services/ocrService');
           const derivedPdf = isPdf
             ? await convertPdfToPdfViaBackend(fileToUpload)
             : await convertImageToPdfViaBackend(fileToUpload);
@@ -290,6 +290,21 @@ export class DocumentFolderService {
                 .eq('id', result.id)
                 .eq('user_id', user.user.id);
             } catch {}
+          }
+          // Garantir OCR imediato para imagens (texto extraído direto do Vision)
+          if (isImage) {
+            try {
+              const text = await extractTextViaBackend(fileToUpload);
+              if (text && text.trim()) {
+                await supabase
+                  .from('documents')
+                  .update({ extracted_data: text, updated_at: new Date().toISOString() })
+                  .eq('id', result.id)
+                  .eq('user_id', user.user.id);
+              }
+            } catch (err) {
+              logger.error('Direct Vision OCR (image) failed', err as Error, { documentId: result.id }, 'DocumentFolderService');
+            }
           }
         }
       } catch (e) {

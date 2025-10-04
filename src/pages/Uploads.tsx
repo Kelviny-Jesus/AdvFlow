@@ -151,20 +151,25 @@ const Uploads = () => {
     }
 
     try {
-      await processUploads();
-      
+      const results = await processUploads();
+      const successWord = results.success === 1 ? 'arquivo' : 'arquivos';
+      const errorWord = results.errors === 1 ? 'arquivo' : 'arquivos';
+
       toast({
         title: "Upload concluído!",
-        description: `${completedCount} arquivo(s) enviado(s) com sucesso.`,
+        description: `${results.success} ${successWord} enviado(s) com sucesso.`,
       });
       
-      if (errorCount > 0) {
+      if (results.errors > 0) {
         toast({
           title: "Alguns arquivos falharam",
-          description: `${errorCount} arquivo(s) não puderam ser enviados.`,
+          description: `${results.errors} ${errorWord} não puderam ser enviados.`,
           variant: "destructive",
         });
       }
+      // Após concluir, limpar a lista de arquivos para evitar reenvio automático,
+      // mantendo o destino selecionado intacto
+      clearAllUploads();
     } catch (error) {
       console.error('Upload error:', error);
       toast({

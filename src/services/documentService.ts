@@ -310,12 +310,32 @@ export class DocumentService {
       throw new Error("Caminho do arquivo não encontrado");
     }
 
+    // Garante extensão adequada no nome forçado do download
+    const ensureExtension = (name: string, mime: string | undefined, logicalType: FileItem['type'] | undefined) => {
+      const hasExt = /\.[A-Za-z0-9]{2,4}$/.test(name);
+      if (hasExt) return name;
+      const mimeLower = (mime || '').toLowerCase();
+      // Áudio: sempre mp3
+      if (logicalType === 'audio' || mimeLower.startsWith('audio/')) {
+        return `${name}.mp3`;
+      }
+      if (mimeLower === 'application/pdf') return `${name}.pdf`;
+      if (mimeLower === 'image/jpeg') return `${name}.jpg`;
+      if (mimeLower === 'image/png') return `${name}.png`;
+      if (mimeLower.includes('word') || mimeLower.includes('document')) return `${name}.docx`;
+      if (mimeLower.includes('sheet') || mimeLower.includes('excel')) return `${name}.xlsx`;
+      return name; // fallback sem alterar
+    };
+
+    const finalDownloadName = downloadFileName
+      ? ensureExtension(downloadFileName, document.mimeType, document.type)
+      : undefined;
+
+    const options = finalDownloadName ? { download: finalDownloadName } : undefined as unknown as { download?: string };
+
     const { data, error } = await supabase.storage
       .from("documents")
-      .createSignedUrl(document.appProperties.supabaseStoragePath, expiresIn, {
-        // Se fornecido, força o header Content-Disposition para baixar com este nome
-        download: downloadFileName,
-      });
+      .createSignedUrl(document.appProperties.supabaseStoragePath, expiresIn, options);
 
     if (error) throw error;
 

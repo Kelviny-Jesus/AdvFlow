@@ -146,7 +146,7 @@ O sistema estará em `http://localhost:8080` (proxy `/api` → `:3000`).
 1. Acesse a aba de geração
 2. Selecione documentos e contextos
 3. Escreva instruções adicionais (prompt)
-4. Use “Analisar DOCS e Sugerir prompt” (gera XML em inglês)
+4. Use “Melhore seu prompt” (gera XML em inglês)
 5. Gere e salve
 
 ## 🔧 Configurações Avançadas
