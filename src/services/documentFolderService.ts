@@ -10,7 +10,6 @@ import { logger, PerformanceMonitor } from "@/lib/logger";
 import { detectFileType, getMimeTypeFromExtension } from "@/utils/fileUtils";
 import { extractionService } from "./extractionService";
 import { aiRenamingService } from "./aiRenamingService";
-import { imageConverterService } from "./imageConverterService";
 import jsPDF from 'jspdf';
 
 type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
@@ -24,84 +23,109 @@ export class DocumentFolderService {
   // Controle de concorrência por cliente
   private static clientProcessingLocks = new Map<string, Promise<void>>();
   /**
-   * Converter JPG para PDF automaticamente usando jsPDF
+   * Converter imagem para PDF automaticamente usando jsPDF
    */
-  private static async convertJpgToPdfIfNeeded(file: File): Promise<{ file: File; converted: boolean; originalName?: string }> {
-    // Verificar se é uma imagem JPG
-    const isJpg = file.type === 'image/jpeg' || file.type === 'image/jpg' || 
-                  file.name.toLowerCase().endsWith('.jpg') || 
-                  file.name.toLowerCase().endsWith('.jpeg');
+  private static async convertImageToPdfIfNeeded(file: File): Promise<{ file: File; converted: boolean; originalName?: string }> {
+    // Verificar se é uma imagem suportada
+    const isImage = file.type.startsWith('image/') ||
+                    /\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name);
 
-    if (!isJpg) {
+    // Se já for PDF, não converter
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (isPdf || !isImage) {
       return { file, converted: false };
     }
 
     try {
-      console.log('🔄 Convertendo JPG para PDF automaticamente:', file.name);
-      
-      // Converter imagem para base64
+      logger.info('Converting image to PDF', { fileName: file.name, fileType: file.type }, 'DocumentFolderService');
+
       const base64Image = await this.fileToBase64(file);
-      
-      // Criar PDF com jsPDF
+      logger.info('Image converted to base64', { fileName: file.name, base64Length: base64Image.length }, 'DocumentFolderService');
+
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
-      // Obter dimensões da imagem
+
       const img = new Image();
-      img.src = base64Image;
-      
-      await new Promise((resolve) => {
-        img.onload = resolve;
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Image loading timeout after 30 seconds'));
+        }, 30000);
+
+        img.onload = () => {
+          clearTimeout(timeout);
+          logger.info('Image loaded successfully for PDF conversion', {
+            fileName: file.name,
+            width: img.width,
+            height: img.height
+          }, 'DocumentFolderService');
+          resolve();
+        };
+
+        img.onerror = (error) => {
+          clearTimeout(timeout);
+          logger.error('Failed to load image for PDF conversion', error as Error, {
+            fileName: file.name
+          }, 'DocumentFolderService');
+          reject(new Error('Failed to load image'));
+        };
+
+        img.src = base64Image;
       });
-      
-      console.log('🖼️ Dimensões da imagem:', img.width, 'x', img.height);
-      
-      // Calcular dimensões para ajustar à página A4
+
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = img.width;
       const imgHeight = img.height;
-      
-      console.log('📄 Dimensões da página PDF:', pdfWidth, 'x', pdfHeight);
-      
-      // Calcular escala para ajustar à página (deixar margem de 10mm)
+
       const margin = 10;
       const availableWidth = pdfWidth - (2 * margin);
       const availableHeight = pdfHeight - (2 * margin);
       const scale = Math.min(availableWidth / imgWidth, availableHeight / imgHeight);
       const scaledWidth = imgWidth * scale;
       const scaledHeight = imgHeight * scale;
-      
-      // Centralizar na página
+
       const x = (pdfWidth - scaledWidth) / 2;
       const y = (pdfHeight - scaledHeight) / 2;
-      
-      console.log('📐 Posição e escala:', { x, y, scaledWidth, scaledHeight, scale });
-      
-      // Adicionar imagem ao PDF
-      pdf.addImage(base64Image, 'JPEG', x, y, scaledWidth, scaledHeight);
-      
-      // Gerar PDF como blob
+
+      const imageFormat = file.type === 'image/png' ? 'PNG' : 'JPEG';
+      logger.info('Adding image to PDF', {
+        fileName: file.name,
+        imageFormat,
+        scaledWidth,
+        scaledHeight
+      }, 'DocumentFolderService');
+
+      pdf.addImage(base64Image, imageFormat, x, y, scaledWidth, scaledHeight);
+
       const pdfBlob = pdf.output('blob');
-      
-      // Criar arquivo PDF
-      const pdfFile = new File([pdfBlob], file.name.replace(/\.(jpg|jpeg)$/i, '.pdf'), {
+      const pdfFileName = file.name.replace(/\.(jpg|jpeg|png|webp|bmp)$/i, '.pdf');
+      const pdfFile = new File([pdfBlob], pdfFileName, {
         type: 'application/pdf'
       });
 
-      console.log('✅ Conversão JPG->PDF concluída:', pdfFile.name);
-      console.log('📊 Tamanho original:', file.size, 'bytes');
-      console.log('📊 Tamanho PDF:', pdfFile.size, 'bytes');
-      console.log('🔍 Tipo MIME do PDF:', pdfFile.type);
-      console.log('🔍 Nome do arquivo PDF:', pdfFile.name);
-      
-      return { 
-        file: pdfFile, 
-        converted: true, 
-        originalName: file.name 
+      logger.info('Image converted to PDF successfully', {
+        originalName: file.name,
+        originalType: file.type,
+        pdfName: pdfFile.name,
+        pdfType: pdfFile.type,
+        originalSize: file.size,
+        pdfSize: pdfFile.size
+      }, 'DocumentFolderService');
+
+      return {
+        file: pdfFile,
+        converted: true,
+        originalName: file.name
       };
 
     } catch (error) {
-      console.log('❌ Erro na conversão JPG->PDF:', error);
+      logger.error('Failed to convert image to PDF, will use original file as fallback', error as Error, {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      }, 'DocumentFolderService');
+
       return { file, converted: false };
     }
   }
@@ -136,10 +160,44 @@ export class DocumentFolderService {
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) throw new Error("Usuário não autenticado");
 
-      // 1. Usar sempre o arquivo original do usuário para upload
-      const fileToUpload = file;
-      const wasConverted = false;
-      const originalFileName = undefined;
+      // 1. Extrair texto da imagem ORIGINAL antes de converter (se for imagem)
+      let extractedTextFromImage: string | null = null;
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name);
+
+      if (isImage) {
+        try {
+          logger.info('Extracting text from original image before conversion', {
+            fileName: file.name,
+            fileType: file.type
+          }, 'DocumentFolderService');
+
+          const { extractTextViaBackend } = await import('@/services/ocrService');
+          extractedTextFromImage = await extractTextViaBackend(file);
+
+          logger.info('Text extracted from original image successfully', {
+            fileName: file.name,
+            textLength: extractedTextFromImage?.length || 0
+          }, 'DocumentFolderService');
+        } catch (error) {
+          logger.error('Failed to extract text from original image, will continue without OCR', error as Error, {
+            fileName: file.name
+          }, 'DocumentFolderService');
+        }
+      }
+
+      // 2. Converter imagem para PDF se necessário
+      const conversionResult = await this.convertImageToPdfIfNeeded(file);
+      const fileToUpload = conversionResult.file;
+      const wasConverted = conversionResult.converted;
+      const originalFileName = conversionResult.originalName;
+
+      // Notificar usuário se conversão falhou e está usando fallback
+      if (originalFileName && !wasConverted) {
+        logger.warn('Image conversion failed, using original file as fallback', {
+          originalFileName,
+          fileName: file.name
+        }, 'DocumentFolderService');
+      }
 
       logger.info('Starting document upload to folder', {
         fileName: fileToUpload.name,
@@ -259,59 +317,60 @@ export class DocumentFolderService {
       // 7. Mapear para FileItem
       const result = this.mapDocumentRowToFileItem(documentRecord);
 
-      // 7.1 Se for imagem/PDF, gerar PDF pesquisável via backend e subir como derivado (não exibido)
-      let extractionUrl = publicUrl.publicUrl;
-      let extractionMime = fileToUpload.type || getMimeTypeFromExtension(fileToUpload.name);
-      try {
-        const isPdf = extractionMime === 'application/pdf' || fileToUpload.name.toLowerCase().endsWith('.pdf');
-        const isImage = (extractionMime || '').startsWith('image/') || /\.(jpg|jpeg|png|webp|tif|tiff|heic|heif|bmp)$/i.test(fileToUpload.name);
-        if (isPdf || isImage) {
-          const { convertPdfToPdfViaBackend, convertImageToPdfViaBackend, extractTextViaBackend } = await import('@/services/ocrService');
-          const derivedPdf = isPdf
-            ? await convertPdfToPdfViaBackend(fileToUpload)
-            : await convertImageToPdfViaBackend(fileToUpload);
+      // 7.1 Salvar texto extraído da imagem original (se houver)
+      if (extractedTextFromImage && extractedTextFromImage.trim()) {
+        try {
+          logger.info('Attempting to save extracted text to database', {
+            documentId: result.id,
+            userId: user.user.id,
+            textLength: extractedTextFromImage.length,
+            textPreview: extractedTextFromImage.substring(0, 50)
+          }, 'DocumentFolderService');
 
-          const baseDir = storagePath.split('/').slice(0, -1).join('/');
-          const ocrName = (fileToUpload.name.replace(/\.[^.]+$/i, '') || 'file') + '_vision_ocr.pdf';
-          const ocrPath = `${baseDir}/${Date.now()}-${ocrName}`;
-
-          const { error: ocrUploadError } = await supabase.storage
+          const { data: updateData, error: updateError } = await supabase
             .from('documents')
-            .upload(ocrPath, derivedPdf, { cacheControl: '3600', upsert: false });
-          if (!ocrUploadError) {
-            const { data: ocrPublic } = supabase.storage.from('documents').getPublicUrl(ocrPath);
-            extractionUrl = ocrPublic.publicUrl;
-            extractionMime = 'application/pdf';
-            // salvar caminho do OCR como metadado
-            try {
-              await supabase
-                .from('documents')
-                .update({ app_properties: { ocr_pdf_path: ocrPath }, updated_at: new Date().toISOString() })
-                .eq('id', result.id)
-                .eq('user_id', user.user.id);
-            } catch {}
+            .update({
+              extracted_data: extractedTextFromImage,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', result.id)
+            .eq('user_id', user.user.id)
+            .select();
+
+          if (updateError) {
+            logger.error('Database update error for extracted_data', updateError, {
+              documentId: result.id,
+              errorCode: updateError.code,
+              errorMessage: updateError.message
+            }, 'DocumentFolderService');
+          } else if (!updateData || updateData.length === 0) {
+            logger.warn('Update returned no rows - document not found or user mismatch', {
+              documentId: result.id,
+              userId: user.user.id
+            }, 'DocumentFolderService');
+          } else {
+            logger.info('Saved extracted text from original image to database successfully', {
+              documentId: result.id,
+              textLength: extractedTextFromImage.length,
+              updatedRows: updateData.length
+            }, 'DocumentFolderService');
           }
-          // Garantir OCR imediato para imagens (texto extraído direto do Vision)
-          if (isImage) {
-            try {
-              const text = await extractTextViaBackend(fileToUpload);
-              if (text && text.trim()) {
-                await supabase
-                  .from('documents')
-                  .update({ extracted_data: text, updated_at: new Date().toISOString() })
-                  .eq('id', result.id)
-                  .eq('user_id', user.user.id);
-              }
-            } catch (err) {
-              logger.error('Direct Vision OCR (image) failed', err as Error, { documentId: result.id }, 'DocumentFolderService');
-            }
-          }
+        } catch (err) {
+          logger.error('Failed to save extracted text to database', err as Error, {
+            documentId: result.id
+          }, 'DocumentFolderService');
         }
-      } catch (e) {
-        logger.error('Failed to create OCR PDF derivative', e as Error, { documentId: result.id }, 'DocumentFolderService');
+      } else {
+        logger.warn('No extracted text to save', {
+          documentId: result.id,
+          hasText: !!extractedTextFromImage,
+          textLength: extractedTextFromImage?.length || 0
+        }, 'DocumentFolderService');
       }
 
-      // 8. Iniciar extração de dados (processo assíncrono) usando o PDF pesquisável se disponível
+      // 8. Iniciar extração de dados (processo assíncrono)
+      const extractionUrl = publicUrl.publicUrl;
+      const extractionMime = fileToUpload.type || getMimeTypeFromExtension(fileToUpload.name);
       this.processDocumentExtraction(result, extractionUrl, extractionMime)
         .catch((error) => {
           logger.error('Failed to process document extraction', error as Error, { documentId: result.id }, 'DocumentFolderService');
@@ -566,37 +625,80 @@ export class DocumentFolderService {
         mimeType
       });
 
-      // Atualizar documento com os dados extraídos
+      // Atualizar documento com os dados extraídos APENAS se não houver texto já extraído do OCR
       const { data: user } = await supabase.auth.getUser();
       if (!user?.user?.id) {
         logger.error('User not authenticated during extraction update', new Error('Unauthenticated'), { documentId: document.id }, 'DocumentFolderService');
         return;
       }
 
-      const { error: updateError } = await supabase
+      // Verificar se já existe extracted_data (do OCR da imagem original)
+      const { data: existingDoc } = await supabase
         .from("documents")
-        .update({
-          extracted_data: extractedData,
-          updated_at: new Date().toISOString()
-        })
+        .select("extracted_data")
         .eq("id", document.id)
-        .eq("user_id", user.user.id);
+        .eq("user_id", user.user.id)
+        .single();
 
-      if (updateError) {
-        logger.error('Failed to update document with extracted data', updateError, { documentId: document.id }, 'DocumentFolderService');
-        throw updateError;
+      const hasExistingText = existingDoc?.extracted_data && existingDoc.extracted_data.trim().length > 0;
+
+      let finalExtractedData: string | null = null;
+
+      if (hasExistingText) {
+        logger.info('Document already has extracted text from OCR, skipping n8n extraction', {
+          documentId: document.id,
+          existingTextLength: existingDoc.extracted_data.length
+        }, 'DocumentFolderService');
+
+        finalExtractedData = existingDoc.extracted_data;
+      } else {
+        // Apenas atualizar se n8n retornou dados E não existe texto anterior
+        if (extractedData && extractedData.trim()) {
+          const { error: updateError } = await supabase
+            .from("documents")
+            .update({
+              extracted_data: extractedData,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", document.id)
+            .eq("user_id", user.user.id);
+
+          if (updateError) {
+            logger.error('Failed to update document with extracted data', updateError, { documentId: document.id }, 'DocumentFolderService');
+            throw updateError;
+          }
+
+          logger.info('Document extraction completed successfully', {
+            documentId: document.id,
+            extractedDataLength: extractedData?.length || 0,
+            hasData: !!extractedData
+          }, 'DocumentFolderService');
+
+          finalExtractedData = extractedData;
+        } else {
+          logger.info('No data from n8n extraction, keeping document without extracted_data', {
+            documentId: document.id
+          }, 'DocumentFolderService');
+        }
       }
 
-      logger.info('Document extraction completed successfully', {
-        documentId: document.id,
-        extractedDataLength: extractedData?.length || 0,
-        hasData: !!extractedData
-      }, 'DocumentFolderService');
+      // 9. Processar renomeação AI se temos dados extraídos (do OCR ou do n8n)
+      if (finalExtractedData && aiRenamingService.isConfigured() && document.clientId) {
+        logger.info('Starting AI renaming with extracted data', {
+          documentId: document.id,
+          dataLength: finalExtractedData.length,
+          source: hasExistingText ? 'OCR' : 'n8n'
+        }, 'DocumentFolderService');
 
-      // 9. Processar renomeação AI se temos dados extraídos
-      if (extractedData && aiRenamingService.isConfigured() && document.clientId) {
         // Usar sistema de lock por cliente para evitar condições de corrida
-        await this.processAIRenamingWithLock(document, extractedData);
+        await this.processAIRenamingWithLock(document, finalExtractedData);
+      } else {
+        logger.warn('Skipping AI renaming', {
+          documentId: document.id,
+          hasData: !!finalExtractedData,
+          isConfigured: aiRenamingService.isConfigured(),
+          hasClientId: !!document.clientId
+        }, 'DocumentFolderService');
       }
 
     }, 'DocumentFolderService.processDocumentExtraction');

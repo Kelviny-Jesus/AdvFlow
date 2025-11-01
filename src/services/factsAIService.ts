@@ -1,5 +1,7 @@
 import { logger } from '../lib/logger';
 import { AppError } from '../lib/errors';
+import { countChatTokens, estimateTokensFromText } from '../lib/tokens';
+import { queue, reserveTokens, releaseTokens, getRemainingTokens, logRateLimiterStatus } from '../lib/rateLimiter';
 
 interface FactsGenerationRequest {
   clientId: string;
@@ -18,6 +20,7 @@ interface FactsGenerationRequest {
   userPrompt?: string;
   mode?: string;
   subType?: string;
+  onProgress?: (currentChunk: number, totalChunks: number, estimatedTimeSeconds: number) => void;
 }
 
 interface FactsGenerationResponse {
@@ -28,8 +31,94 @@ interface FactsGenerationResponse {
 
 class FactsAIService {
   private readonly OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-  private readonly MODEL = 'gpt-4o-mini-2024-07-18'; // Mapeado para gpt-4o-mini
-  private readonly TIMEOUT = 120000; // 2 minutos
+  private readonly MODEL = 'gpt-5';
+  private readonly TIMEOUT = 300000;
+  private readonly MAX_TOKENS_PER_REQUEST = 100000;
+  private readonly RATE_LIMIT_DELAY = 65000;
+  private readonly MAX_OUTPUT_TOKENS = 16000;
+
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries = 5,
+    chunkId?: string
+  ): Promise<T> {
+    let delay = 500;
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        console.log(`[Chunk ${chunkId}] Tentativa ${i + 1}/${maxRetries} de enviar request`);
+        const result = await fn();
+        console.log(`[Chunk ${chunkId}] Request bem-sucedida na tentativa ${i + 1}`);
+        return result;
+      } catch (err: any) {
+        const status = err?.status ?? err?.response?.status;
+        const errorMessage = err?.message || 'Unknown error';
+        const errorDetails = err?.response?.data || err?.response?.body || {};
+
+        console.log(`[Chunk ${chunkId}] Erro na tentativa ${i + 1}/${maxRetries}`);
+        console.log(`   ├─ Status HTTP: ${status || 'N/A'}`);
+        console.log(`   ├─ Mensagem: ${errorMessage}`);
+        console.log(`   ├─ Tipo: ${err?.name || 'Error'}`);
+
+        if (Object.keys(errorDetails).length > 0) {
+          console.log(`   ├─ Detalhes: ${JSON.stringify(errorDetails)}`);
+        }
+
+        if (status === 429) {
+          const retryAfterHeader =
+            err?.response?.headers?.["retry-after"] ||
+            err?.response?.headers?.get?.("retry-after");
+          const retryAfterMs = retryAfterHeader
+            ? Number(retryAfterHeader) * 1000
+            : delay + Math.random() * 300;
+
+          console.log(`[Chunk ${chunkId}] Rate limit (429) detectado`);
+          console.log(`   ├─ Retry-After header: ${retryAfterHeader || 'não fornecido'}`);
+          console.log(`   ├─ Aguardando: ${Math.ceil(retryAfterMs / 1000)}s`);
+          console.log(`   └─ Próxima tentativa: ${i + 2}/${maxRetries}`);
+
+          logRateLimiterStatus();
+
+          await new Promise(r => setTimeout(r, retryAfterMs));
+          delay = Math.min(delay * 2, 8000);
+          continue;
+        }
+
+        if (status === 400) {
+          console.log(`[Chunk ${chunkId}] Bad Request (400) - Erro na request`);
+          console.log(`   └─ Possíveis causas: modelo inválido, tokens excedidos, formato incorreto`);
+        }
+
+        if (status === 401) {
+          console.log(`[Chunk ${chunkId}] Unauthorized (401) - API key inválida`);
+        }
+
+        if (status === 404) {
+          console.log(`[Chunk ${chunkId}] Not Found (404) - Modelo não encontrado`);
+          console.log(`   └─ Verifique se o modelo '${this.MODEL}' existe na sua conta OpenAI`);
+        }
+
+        if (status === 500 || status === 502 || status === 503) {
+          console.log(`[Chunk ${chunkId}] Erro no servidor OpenAI (${status})`);
+          console.log(`   └─ Tentando novamente após ${Math.ceil(delay / 1000)}s...`);
+          await new Promise(r => setTimeout(r, delay));
+          delay = Math.min(delay * 2, 8000);
+          continue;
+        }
+
+        console.log(`   └─ Erro não recuperável ou sem mais tentativas`);
+        throw err;
+      }
+    }
+
+    console.log(`[Chunk ${chunkId}] Falhou após ${maxRetries} tentativas`);
+    logRateLimiterStatus();
+    throw new AppError('Failed after multiple retries due to rate limiting', 429);
+  }
 
   /**
    * Gerar fatos usando IA baseado nos documentos selecionados
@@ -43,11 +132,14 @@ class FactsAIService {
         throw new AppError('OpenAI API key not configured', 500);
       }
 
-      console.log('🤖 Iniciando geração de fatos para cliente:', request.clientName);
-      console.log('📄 Documentos selecionados:', request.documentIds.length);
-      console.log('📊 Documentos com dados extraídos:', request.documents.filter(d => d.extractedData).length);
+      console.log('\n========== INICIANDO GERAÇÃO DE FATOS ==========');
+      console.log(`Cliente: ${request.clientName}`);
+      console.log(`Documentos selecionados: ${request.documentIds.length}`);
+      console.log(`Documentos com dados extraídos: ${request.documents.filter(d => d.extractedData).length}`);
+      console.log(`Modo: ${request.mode || 'padrão'}`);
+      console.log(`Modelo OpenAI: ${this.MODEL}`);
+      console.log(`Timestamp: ${new Date().toISOString()}`);
 
-      // Preparar dados dos documentos para o prompt
       const documentsInfo = request.documents.map(doc => ({
         id: doc.id,
         name: doc.name,
@@ -58,62 +150,184 @@ class FactsAIService {
         isContext: !!doc.isContext,
       }));
 
-      // Construir prompt
-      const prompt = this.buildPrompt(request, documentsInfo);
+      const systemPrompt = this.getSystemPrompt(request.mode, request.subType);
+      const estimatedSystemTokens = estimateTokensFromText(systemPrompt);
+      const estimatedUserPromptTokens = request.userPrompt ? estimateTokensFromText(request.userPrompt) : 0;
+      const baseTokens = estimatedSystemTokens + estimatedUserPromptTokens + 500;
 
-      // Fazer requisição para OpenAI
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT);
+      console.log('\n=== ANÁLISE DE TOKENS ===');
+      console.log(`   System prompt: ~${estimatedSystemTokens} tokens`);
+      console.log(`   User prompt: ~${estimatedUserPromptTokens} tokens`);
+      console.log(`   Overhead: ~500 tokens`);
+      console.log(`   Base total: ~${baseTokens} tokens`);
+      console.log(`   Limite por chunk: ${this.MAX_TOKENS_PER_REQUEST} tokens`);
+      console.log(`   Disponível por chunk: ${this.MAX_TOKENS_PER_REQUEST - baseTokens} tokens`);
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.MODEL,
-          messages: [
-            {
-              role: 'system',
-              content: this.getSystemPrompt(request.mode, request.subType)
-            },
-            {
-              role: 'user',
-              content: prompt
-            },
-            ...(request.userPrompt
-              ? [{ role: 'user' as const, content: `Additional user requirements to respect (in Portuguese or English):\n${request.userPrompt}` }]
-              : [])
-          ],
-          temperature: 0.3,
-          max_tokens: 4000
-        }),
-        signal: controller.signal
+      const chunks = this.splitDocumentsIntoChunks(documentsInfo, this.MAX_TOKENS_PER_REQUEST - baseTokens);
+
+      console.log(`\n=== DIVISÃO EM CHUNKS ===`);
+      console.log(`   Total de chunks: ${chunks.length}`);
+      console.log(`   Tempo estimado: ~${Math.ceil(chunks.length * this.RATE_LIMIT_DELAY / 1000 / 60)} minutos`);
+
+      chunks.forEach((chunk, idx) => {
+        const chunkSize = estimateTokensFromText(JSON.stringify(chunk));
+        console.log(`   Chunk ${idx + 1}: ${chunk.length} docs, ~${chunkSize} tokens`);
       });
 
-      clearTimeout(timeoutId);
+      logRateLimiterStatus();
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new AppError(
-          `OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`,
-          500
+      let allFacts: string[] = [];
+      const chunkStartTime = Date.now();
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkId = `${i + 1}/${chunks.length}`;
+        console.log(`\n========== PROCESSANDO CHUNK ${chunkId} ==========`);
+        console.log(`   Documentos neste chunk: ${chunks[i].length}`);
+        console.log(`   Timestamp: ${new Date().toISOString()}`);
+
+        const prompt = this.buildPrompt(request, chunks[i]);
+
+        const messages = [
+          {
+            role: 'system' as const,
+            content: systemPrompt
+          },
+          {
+            role: 'user' as const,
+            content: prompt
+          },
+          ...(request.userPrompt
+            ? [{ role: 'user' as const, content: `Additional user requirements to respect (in Portuguese or English):\n${request.userPrompt}` }]
+            : []),
+          ...(i > 0
+            ? [{ role: 'user' as const, content: `IMPORTANT: This is chunk ${i + 1} of ${chunks.length}. Continue the analysis from previous chunks. Avoid repeating facts already mentioned.` }]
+            : [])
+        ];
+
+        console.log(`\nCalculando tokens com tiktoken...`);
+        const actualTokens = countChatTokens(this.MODEL, messages) + this.MAX_OUTPUT_TOKENS;
+
+        console.log(`Chunk ${chunkId}: ${actualTokens} tokens total`);
+        console.log(`   ├─ Mensagens (input): ${countChatTokens(this.MODEL, messages)} tokens`);
+        console.log(`   └─ Output máximo: ${this.MAX_OUTPUT_TOKENS} tokens`);
+
+        await reserveTokens(actualTokens);
+
+        const avgTimePerChunk = i > 0 ? (Date.now() - chunkStartTime) / i : this.RATE_LIMIT_DELAY;
+        const remainingChunks = chunks.length - i - 1;
+        const estimatedTimeSeconds = Math.ceil((remainingChunks * avgTimePerChunk + this.RATE_LIMIT_DELAY) / 1000);
+
+        if (request.onProgress) {
+          request.onProgress(i + 1, chunks.length, estimatedTimeSeconds);
+        }
+
+        console.log(`\nEnviando request para OpenAI...`);
+        const chunkResult = await queue.add(() =>
+          this.retryWithBackoff(async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.TIMEOUT);
+
+            try {
+              const requestBody = {
+                model: this.MODEL,
+                messages,
+                max_completion_tokens: this.MAX_OUTPUT_TOKENS
+              };
+
+              console.log(`Request body preparado:`);
+              console.log(`   ├─ model: ${requestBody.model}`);
+              console.log(`   ├─ messages: ${messages.length} mensagens`);
+              console.log(`   └─ max_completion_tokens: ${requestBody.max_completion_tokens}`);
+
+              const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
+              });
+
+              clearTimeout(timeoutId);
+
+              console.log(`Response recebida:`);
+              console.log(`   ├─ Status: ${response.status} ${response.statusText}`);
+              console.log(`   ├─ Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`);
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.log(`   └─ Error body: ${JSON.stringify(errorData, null, 2)}`);
+
+                const error: any = new Error(errorData.error?.message || response.statusText);
+                error.status = response.status;
+                error.response = {
+                  status: response.status,
+                  data: errorData,
+                  headers: Object.fromEntries(response.headers.entries())
+                };
+                throw error;
+              }
+
+              const data = await response.json();
+
+              console.log(`Response data completa: ${JSON.stringify(data, null, 2)}`);
+
+              const content = data.choices?.[0]?.message?.content?.trim();
+
+              console.log(`   ├─ Tokens usados (prompt): ${data.usage?.prompt_tokens || 'N/A'}`);
+              console.log(`   ├─ Tokens usados (completion): ${data.usage?.completion_tokens || 'N/A'}`);
+              console.log(`   ├─ Tokens totais: ${data.usage?.total_tokens || 'N/A'}`);
+              console.log(`   ├─ Choices disponíveis: ${data.choices?.length || 0}`);
+              console.log(`   ├─ Content extraído: ${content ? 'SIM' : 'NÃO'}`);
+              console.log(`   └─ Resposta: ${content?.length || 0} caracteres`);
+
+              return content;
+            } catch (error) {
+              console.log(`Liberando ${actualTokens} tokens devido a erro`);
+              releaseTokens(actualTokens);
+              throw error;
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          }, 5, chunkId)
         );
+
+        console.log(`Resultado do chunk ${i + 1}: ${chunkResult ? `${chunkResult.length} caracteres` : 'NULL/UNDEFINED'}`);
+
+        if (chunkResult) {
+          allFacts.push(chunkResult);
+          console.log(`Chunk ${i + 1} processado: ${chunkResult.length} caracteres`);
+        } else {
+          console.log(`AVISO: Chunk ${i + 1} retornou vazio ou undefined`);
+        }
+
+        if (i < chunks.length - 1) {
+          console.log(`Aguardando ${this.RATE_LIMIT_DELAY / 1000}s antes do próximo chunk (rate limit)...`);
+          await this.delay(this.RATE_LIMIT_DELAY);
+        }
       }
 
-      const data = await response.json();
-      const generatedFacts = data.choices?.[0]?.message?.content?.trim();
+      console.log(`\n=== CONSOLIDAÇÃO DOS CHUNKS ===`);
+      console.log(`   Total de chunks processados: ${chunks.length}`);
+      console.log(`   Chunks com conteúdo: ${allFacts.length}`);
+      console.log(`   Chunks vazios: ${chunks.length - allFacts.length}`);
+
+      const generatedFacts = allFacts.join('\n\n');
+
+      console.log(`   Fatos gerados (length): ${generatedFacts.length}`);
+      console.log(`   Fatos gerados (preview): ${generatedFacts.substring(0, 200)}...`);
 
       if (!generatedFacts) {
-        console.log('❌ IA não retornou fatos gerados');
+        console.log('IA não retornou fatos gerados');
+        console.log(`   allFacts array: ${JSON.stringify(allFacts)}`);
         throw new AppError('No response from OpenAI', 500);
       }
 
       const duration = Date.now() - startTime;
-      
-      console.log('✅ Geração de fatos concluída em', duration, 'ms');
-      console.log('📝 Tamanho dos fatos gerados:', generatedFacts.length, 'caracteres');
+
+      console.log('Geração de fatos concluída em', duration, 'ms');
+      console.log('Tamanho dos fatos gerados:', generatedFacts.length, 'caracteres');
       
       logger.info('Facts generation completed successfully', {
         clientId: request.clientId,
@@ -129,7 +343,7 @@ class FactsAIService {
       const duration = Date.now() - startTime;
       
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('⏰ Timeout na geração de fatos');
+        console.log('Timeout na geração de fatos');
         logger.error('Timeout in facts generation', new Error('Timeout in facts generation'), {
           clientId: request.clientId,
           duration,
@@ -138,7 +352,7 @@ class FactsAIService {
         throw new AppError('Timeout na geração de fatos', 408);
       }
 
-      console.log('❌ Erro na geração de fatos:', error);
+      console.log('Erro na geração de fatos:', error);
       logger.error('Error in facts generation', new Error(error instanceof Error ? error.message : 'Unknown error'), {
         clientId: request.clientId,
         duration
@@ -146,6 +360,42 @@ class FactsAIService {
 
       throw error;
     }
+  }
+
+  private splitDocumentsIntoChunks(
+    documents: Array<{
+      id: string;
+      name: string;
+      docNumber: string;
+      type: string;
+      extractedData: string;
+      createdAt: string;
+      isContext: boolean;
+    }>,
+    maxTokensPerChunk: number
+  ): Array<typeof documents> {
+    const chunks: Array<typeof documents> = [];
+    let currentChunk: typeof documents = [];
+    let currentChunkTokens = 0;
+
+    for (const doc of documents) {
+      const docTokens = estimateTokensFromText(JSON.stringify(doc));
+
+      if (currentChunkTokens + docTokens > maxTokensPerChunk && currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = [doc];
+        currentChunkTokens = docTokens;
+      } else {
+        currentChunk.push(doc);
+        currentChunkTokens += docTokens;
+      }
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+    }
+
+    return chunks.length > 0 ? chunks : [documents];
   }
 
   /**

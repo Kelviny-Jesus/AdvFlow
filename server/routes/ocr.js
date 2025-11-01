@@ -46,6 +46,10 @@ const uploadPdf = multer({
   },
 });
 
+// ENDPOINT DESABILITADO - NÃO USADO MAIS
+// A conversão de imagem para PDF agora é feita no frontend (jsPDF)
+// Use /extract-text para extrair texto de imagens
+/*
 router.post('/convert-image-to-pdf', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo de imagem fornecido' });
 
@@ -78,6 +82,40 @@ router.post('/convert-image-to-pdf', upload.single('image'), async (req, res) =>
     }
 
     const pdfDoc = await PDFDocument.create();
+
+    // PÁGINA 1: Embedar imagem original
+    let embeddedImage;
+    const mimeType = (req.file.mimetype || '').toLowerCase();
+
+    try {
+      if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+        embeddedImage = await pdfDoc.embedJpg(imageBuffer);
+      } else if (mimeType === 'image/png') {
+        embeddedImage = await pdfDoc.embedPng(imageBuffer);
+      } else {
+        // Fallback: tentar como JPEG
+        embeddedImage = await pdfDoc.embedJpg(imageBuffer);
+      }
+
+      // Criar página com dimensões da imagem
+      const imgWidth = embeddedImage.width;
+      const imgHeight = embeddedImage.height;
+      const imagePage = pdfDoc.addPage([imgWidth, imgHeight]);
+
+      // Desenhar imagem em tamanho real
+      imagePage.drawImage(embeddedImage, {
+        x: 0,
+        y: 0,
+        width: imgWidth,
+        height: imgHeight,
+      });
+    } catch (imageError) {
+      // eslint-disable-next-line no-console
+      console.error('Erro ao embedar imagem no PDF:', imageError);
+      // Continuar mesmo assim e criar apenas página de texto
+    }
+
+    // PÁGINA 2: Texto extraído do OCR
     let page = pdfDoc.addPage();
     let { width, height } = page.getSize();
     const fontSize = 11;
@@ -125,31 +163,84 @@ router.post('/convert-image-to-pdf', upload.single('image'), async (req, res) =>
     try { await fs.unlink(tempFilePath); } catch {}
   }
 });
+*/
 
 router.post('/extract-text', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo de imagem fornecido' });
+
   const tempFilePath = req.file.path;
+
   try {
+    // Validar API key
+    const apiKey = process.env.GOOGLE_VISION_API_KEY;
+    if (!apiKey) {
+      console.error('[OCR] GOOGLE_VISION_API_KEY não configurada no servidor');
+      return res.status(500).json({
+        error: 'Configuração do servidor incorreta',
+        details: 'GOOGLE_VISION_API_KEY não está configurada'
+      });
+    }
+
     const imageBuffer = await fs.readFile(tempFilePath);
     const base64Image = imageBuffer.toString('base64');
-    const apiKey = process.env.GOOGLE_VISION_API_KEY;
+
+    console.log('[OCR] Chamando Google Vision API para extração de texto...');
+    console.log('[OCR] Tamanho da imagem:', imageBuffer.length, 'bytes');
+
     const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION', maxResults: 1 }], imageContext: { languageHints: ['pt-BR', 'pt'] } }] })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { content: base64Image },
+          features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
+          imageContext: { languageHints: ['pt-BR', 'pt', 'en'] }
+        }]
+      })
     });
+
+    // Verificar status da resposta
+    if (!resp.ok) {
+      const errorBody = await resp.text();
+      console.error('[OCR] Google Vision API erro:', resp.status, errorBody);
+      return res.status(502).json({
+        error: 'Erro na API do Google Vision',
+        details: `Status ${resp.status}: ${errorBody}`
+      });
+    }
+
     const data = await resp.json();
+
+    // Verificar se há erro na resposta da API
+    if (data.responses?.[0]?.error) {
+      const apiError = data.responses[0].error;
+      console.error('[OCR] Google Vision API retornou erro:', apiError);
+      return res.status(502).json({
+        error: 'Erro na extração de texto',
+        details: apiError.message || 'Erro desconhecido da API'
+      });
+    }
+
     const text = data?.responses?.[0]?.textAnnotations?.[0]?.description || '';
+
+    console.log('[OCR] Texto extraído com sucesso:', text.length, 'caracteres');
+
     res.json({ text, success: true, filename: req.file.originalname });
   } catch (error) {
-    res.status(500).json({ error: 'Erro na extração de texto', details: error?.message || 'Erro desconhecido' });
+    console.error('[OCR] Erro na extração de texto:', error);
+    res.status(500).json({
+      error: 'Erro na extração de texto',
+      details: error?.message || 'Erro desconhecido'
+    });
   } finally {
     try { await fs.unlink(tempFilePath); } catch {}
   }
 });
 
-export default router;
-
-// Vision PDF via GCS (async)
+// ENDPOINT DESABILITADO - NÃO USADO MAIS
+// A conversão agora é feita no frontend (jsPDF)
+// OCR usa apenas /extract-text endpoint
+/*
 router.post('/convert-pdf-to-pdf', uploadPdf.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum PDF fornecido' });
   const tempFilePath = req.file.path;
@@ -235,6 +326,9 @@ router.post('/convert-pdf-to-pdf', uploadPdf.single('pdf'), async (req, res) => 
     try { await fs.unlink(tempFilePath); } catch {}
   }
 });
+*/
+
+export default router;
 
 function sanitizeForPdf(input) {
   if (!input) return '';

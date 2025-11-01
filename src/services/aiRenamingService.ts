@@ -21,7 +21,7 @@ interface RenamingResponse {
 
 class AIRenamingService {
   private readonly OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-  private readonly MODEL = 'gpt-4o-mini-2024-07-18'; // Usando o modelo mais próximo disponível
+  private readonly MODEL = 'gpt-5';
   private readonly API_URL = 'https://api.openai.com/v1/chat/completions';
   private readonly TIMEOUT = 30000; // 30 segundos
 
@@ -37,9 +37,9 @@ class AIRenamingService {
         throw new AppError('OpenAI API key not configured', 500);
       }
 
-      console.log('🤖 Iniciando renomeação AI para:', request.fileName);
-      console.log('📄 Cliente:', request.clientName || 'Não especificado');
-      console.log('📊 Tamanho do conteúdo extraído:', request.extractedData.length, 'caracteres');
+      console.log('Iniciando renomeação AI para:', request.fileName);
+      console.log('Cliente:', request.clientName || 'Não especificado');
+      console.log('Tamanho do conteúdo extraído:', request.extractedData.length, 'caracteres');
       
       logger.info('Starting AI document renaming', {
         documentId: request.documentId,
@@ -51,6 +51,10 @@ class AIRenamingService {
 
       // Preparar o prompt baseado no template fornecido
       const prompt = this.buildPrompt(request);
+
+      console.log('Prompt enviado para OpenAI:');
+      console.log('System prompt:', this.getSystemPrompt().substring(0, 200) + '...');
+      console.log('User prompt:', prompt.substring(0, 500) + '...');
 
       // Fazer requisição para OpenAI
       const controller = new AbortController();
@@ -74,11 +78,7 @@ class AIRenamingService {
               content: prompt
             }
           ],
-          max_tokens: 100,
-          temperature: 0.3,
-          top_p: 1,
-          frequency_penalty: 0,
-          presence_penalty: 0
+          max_completion_tokens: 500
         }),
         signal: controller.signal
       });
@@ -94,20 +94,27 @@ class AIRenamingService {
       }
 
       const data = await response.json();
+
+      console.log('Resposta completa da OpenAI:', JSON.stringify(data, null, 2));
+      console.log('Usage:', data.usage);
+      console.log('Completion tokens details:', data.usage?.completion_tokens_details);
+
       const suggestedName = data.choices?.[0]?.message?.content?.trim();
 
-      console.log('🎯 Nome sugerido pela IA:', suggestedName);
+      console.log('Nome sugerido pela IA:', suggestedName);
 
       if (!suggestedName) {
-        console.log('❌ IA não retornou nome sugerido');
+        console.log('IA não retornou nome sugerido');
+        console.log('Finish reason:', data.choices?.[0]?.finish_reason);
+        console.log('Message content:', data.choices?.[0]?.message?.content);
         throw new AppError('No response from OpenAI', 500);
       }
 
       const duration = Date.now() - startTime;
-      
-      console.log('✅ Renomeação AI concluída em', duration, 'ms');
-      console.log('📝 Nome original:', request.fileName);
-      console.log('🆕 Nome sugerido:', suggestedName);
+
+      console.log('Renomeação AI concluída em', duration, 'ms');
+      console.log('Nome original:', request.fileName);
+      console.log('Nome sugerido:', suggestedName);
       
       logger.info('AI renaming completed successfully', {
         documentId: request.documentId,
@@ -322,8 +329,8 @@ IMPORTANTE: Sua resposta deve ser APENAS o nome do documento no formato especifi
     const isValid = pattern.test(name);
     
     if (!isValid) {
-      console.log('❌ Nome sugerido não segue o formato:', name);
-      console.log('✅ Formato esperado: DOC n. 001 + CLIENTE + TIPO + 2024-03-15');
+      console.log('Nome sugerido não segue o formato:', name);
+      console.log('Formato esperado: DOC n. 001 + CLIENTE + TIPO + 2024-03-15');
     }
     
     return isValid;

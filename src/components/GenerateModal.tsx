@@ -6,7 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PenLine, FileText, Handshake, ScrollText, ArrowLeft, Sparkles, Wand2, Folder as FolderIcon } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { PenLine, FileText, Handshake, ScrollText, ArrowLeft, Sparkles, Wand2, Folder as FolderIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useRef, useState, useEffect } from "react";
@@ -37,6 +38,10 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
   const [docSearch, setDocSearch] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string>("");
+  const [progress, setProgress] = useState(0);
+  const [currentChunk, setCurrentChunk] = useState(0);
+  const [totalChunks, setTotalChunks] = useState(0);
+  const [estimatedTimeSeconds, setEstimatedTimeSeconds] = useState(0);
 
   const { data: folders = [] } = useFoldersReal();
   const { data: docs = [] } = useDocumentsByFolder(selectedFolderId || null);
@@ -122,6 +127,11 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
   const handleGenerate = async () => {
     if (!selectedFolderId || selectedDocIds.length === 0 || !active) return;
     setGenerating(true);
+    setProgress(0);
+    setCurrentChunk(0);
+    setTotalChunks(0);
+    setEstimatedTimeSeconds(0);
+
     try {
       const prefs = getUserPrefs();
       const selected = (docs as any[]).filter((d) => selectedDocIds.includes(d.id));
@@ -163,13 +173,24 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
         mode: active,
         subType: subtype,
         userPrompt: prompt,
+        onProgress: (chunk, total, estimatedSeconds) => {
+          setCurrentChunk(chunk);
+          setTotalChunks(total);
+          setProgress(Math.floor((chunk / total) * 100));
+          setEstimatedTimeSeconds(estimatedSeconds);
+        },
       });
       setResult(text);
+      setProgress(100);
       try { playActionSfx(); } catch {}
     } catch (e) {
       setResult("Erro ao gerar. Tente novamente.");
     } finally {
       setGenerating(false);
+      setProgress(0);
+      setCurrentChunk(0);
+      setTotalChunks(0);
+      setEstimatedTimeSeconds(0);
     }
   };
 
@@ -772,6 +793,25 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
                 </div>
               </div>
             </div>
+
+            {generating && totalChunks > 0 && (
+              <div className="space-y-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    Processando... isso pode levar alguns minutos
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-end text-xs text-blue-700 dark:text-blue-300">
+                    <span>
+                      {progress}% concluído
+                    </span>
+                  </div>
+                  <Progress value={progress} className="h-2" />
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-4">
               <Button onClick={handleGenerate} disabled={generating || !selectedFolderId || selectedDocIds.length === 0}>

@@ -130,6 +130,7 @@ export type Database = {
           description: string | null
           doc_number: string | null
           download_link: string | null
+          extracted_data: string | null
           folder_id: string | null
           google_drive_id: string | null
           id: string
@@ -152,6 +153,7 @@ export type Database = {
           description?: string | null
           doc_number?: string | null
           download_link?: string | null
+          extracted_data?: string | null
           folder_id?: string | null
           google_drive_id?: string | null
           id?: string
@@ -174,6 +176,7 @@ export type Database = {
           description?: string | null
           doc_number?: string | null
           download_link?: string | null
+          extracted_data?: string | null
           folder_id?: string | null
           google_drive_id?: string | null
           id?: string

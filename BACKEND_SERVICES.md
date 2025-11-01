@@ -329,3 +329,137 @@ const { data: results } = useSearchDocuments("contrato", {
 - **Progress tracking** em tempo real
 
 Este sistema de backend está completamente integrado com o frontend React e pronto para uso em produção! 🎉
+
+---
+
+## 🤖 Configurações de IA
+
+### Modelo Atual: GPT-5
+
+O sistema utiliza o modelo `gpt-5` da OpenAI para geração de fatos e renomeação inteligente de documentos.
+
+#### Rate Limits (Tier 2)
+- **TPM (Tokens por Minuto):** 500,000
+- **RPM (Requests por Minuto):** 500
+- **TPD (Tokens por Dia):** 1,500,000
+
+#### Parâmetros Suportados
+O GPT-5 **não suporta** os parâmetros tradicionais de customização:
+- ❌ `temperature`
+- ❌ `top_p`
+- ❌ `frequency_penalty`
+- ❌ `presence_penalty`
+
+**Parâmetro único suportado:**
+- ✅ `max_completion_tokens` (substitui o antigo `max_tokens`)
+
+### Rate Limiter (`src/lib/rateLimiter.ts`)
+
+Configurações de controle de taxa para evitar exceder limites da API:
+
+```typescript
+const TPM_BUDGET = 490000;  // 490k tokens/min (margem de 10k)
+const RPM_BUDGET = 490;      // 490 requests/min (margem de 10)
+```
+
+**Funcionalidades:**
+- Sistema de lock/semáforo para sincronização de requests
+- Reserva de tokens antes de cada chamada
+- Liberação automática de tokens em caso de erro
+- Janela deslizante de 60 segundos
+- Logs detalhados de utilização
+
+### Facts AI Service (`src/services/factsAIService.ts`)
+
+Serviço responsável por gerar sínteses e procurações usando IA.
+
+#### Configurações Críticas
+
+```typescript
+TIMEOUT: 300000              // 5 minutos (300s)
+MAX_TOKENS_PER_REQUEST: 100000   // 100k tokens por chunk
+MAX_OUTPUT_TOKENS: 16000         // 16k tokens para resposta
+```
+
+#### Por que esses valores?
+
+**1. TIMEOUT = 5 minutos**
+- GPT-5 usa "reasoning tokens" (raciocínio interno) que aumentam tempo de processamento
+- Requests grandes (~200k tokens) precisam de mais tempo
+- Timeout anterior de 2 minutos causava abortos prematuros
+
+**2. MAX_TOKENS_PER_REQUEST = 100k tokens**
+- Aproveita melhor o contexto grande do GPT-5
+- Reduz número de chunks (menos divisões = mais rápido)
+- Anterior era 25k, causava fragmentação excessiva
+
+**3. MAX_OUTPUT_TOKENS = 16k tokens**
+- GPT-5 usa **reasoning tokens** (~1k) que consomem do `max_completion_tokens` mas **não aparecem no `content`**
+- Espaço necessário: reasoning (~1k) + resposta real (~15k)
+- Valor anterior de 1k resultava em respostas vazias (`content: ""`)
+
+#### Estrutura da Resposta GPT-5
+
+```json
+{
+  "choices": [{
+    "message": {
+      "content": "Resposta visível ao usuário",
+      "role": "assistant"
+    },
+    "finish_reason": "length" | "stop"
+  }],
+  "usage": {
+    "completion_tokens": 16000,
+    "completion_tokens_details": {
+      "reasoning_tokens": 1000,    // ← Raciocínio interno (invisível)
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  }
+}
+```
+
+**⚠️ IMPORTANTE:** Os `reasoning_tokens` são contabilizados no `completion_tokens` total mas **não aparecem** no campo `content`. Por isso é crítico deixar margem generosa no `max_completion_tokens`.
+
+### AI Renaming Service (`src/services/aiRenamingService.ts`)
+
+Serviço para renomeação inteligente de documentos.
+
+```typescript
+MODEL: 'gpt-5'
+TIMEOUT: 30000               // 30 segundos
+max_completion_tokens: 100   // Nomes curtos, precisa menos tokens
+```
+
+### Padrões de Logs
+
+Todos os logs do sistema **não utilizam emojis** para facilitar parsing e análise automática.
+
+**Exemplo:**
+```typescript
+// ❌ Evitar
+console.log('🤖 Iniciando processamento...');
+
+// ✅ Usar
+console.log('Iniciando processamento...');
+```
+
+### Troubleshooting Comum
+
+#### 1. "Content vazio" / "No response from OpenAI"
+**Causa:** `max_completion_tokens` muito baixo
+**Solução:** Aumentar para pelo menos 16k para dar espaço aos reasoning tokens
+
+#### 2. "Timeout in facts generation"
+**Causa:** Timeout muito curto para requests grandes
+**Solução:** Aumentar `TIMEOUT` para 300000ms (5 minutos)
+
+#### 3. "Unsupported parameter: 'temperature'"
+**Causa:** GPT-5 não aceita parâmetros de customização
+**Solução:** Remover todos os parâmetros exceto `max_completion_tokens`
+
+#### 4. "Orçamento de tokens insuficientes"
+**Causa:** Race condition no rate limiter ou budget muito baixo
+**Solução:** Sistema já implementa lock/semáforo com 490k TPM budget

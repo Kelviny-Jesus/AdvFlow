@@ -125,6 +125,7 @@ export function useSmartUploadReal() {
 
       // Cache de destinos resolvidos (evita criar uma pasta por arquivo)
       const resolvedDestinations = new Map<string, FolderItem>();
+      const pendingResolutions = new Map<string, Promise<FolderItem>>();
       const buildDestKey = (d: UploadDestination) => {
         return JSON.stringify({
           type: d.type,
@@ -143,8 +144,14 @@ export function useSmartUploadReal() {
           // 1. Resolver destino (criar pasta se necessário)
           const cacheKey = buildDestKey(uploadFile.destination);
           let targetFolder = resolvedDestinations.get(cacheKey);
+
           if (!targetFolder) {
-            targetFolder = await resolveDestination(uploadFile.destination);
+            let resolutionPromise = pendingResolutions.get(cacheKey);
+            if (!resolutionPromise) {
+              resolutionPromise = resolveDestination(uploadFile.destination);
+              pendingResolutions.set(cacheKey, resolutionPromise);
+            }
+            targetFolder = await resolutionPromise;
             resolvedDestinations.set(cacheKey, targetFolder);
           }
           setLastTargetFolder(targetFolder);
