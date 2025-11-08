@@ -31,7 +31,7 @@ interface FactsGenerationResponse {
 
 class FactsAIService {
   private readonly OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-  private readonly MODEL = 'gpt-4o-mini';
+  private readonly MODEL = 'gpt-5';
   private readonly TIMEOUT = 300000;
   private readonly MAX_TOKENS_PER_REQUEST = 100000;
   private readonly RATE_LIMIT_DELAY = 65000;

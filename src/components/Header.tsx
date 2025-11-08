@@ -110,13 +110,6 @@ export function Header({
             </motion.div>
           </Button>
 
-          <Button
-            variant="outline"
-            onClick={handleSignOut}
-            className="hover:bg-muted/50 transition-colors rounded-2xl"
-          >
-            Sair
-          </Button>
         </div>
       </div>
       <SearchModal open={openSearch} onOpenChange={setOpenSearch} initialQuery={searchQuery} />

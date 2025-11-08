@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -7,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { PenLine, FileText, Handshake, ScrollText, ArrowLeft, Sparkles, Wand2, Folder as FolderIcon, Loader2 } from "lucide-react";
+import { PenLine, FileText, Handshake, ScrollText, ArrowLeft, Sparkles, Wand2, Folder as FolderIcon, Loader2, HardDrive, Cloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useMemo, useRef, useState, useEffect } from "react";
@@ -16,6 +17,9 @@ import { useDocumentsByFolder } from "@/hooks/useDocumentsByFolder";
 import { factsAIService } from "@/services/factsAIService";
 import { DocumentFolderService } from "@/services/documentFolderService";
 import { FactStoreService } from "@/services/factStoreService";
+import { toast } from "@/hooks/use-toast";
+import { googleDriveService } from "@/services/googleDriveService";
+import { logger } from "@/lib/logger";
 import jsPDF from "jspdf";
 import { renderPdfFirstPageToPng } from "@/lib/pdfUtils";
 import { getUserPrefs, mapJsPdfFontFamily, getDocxFontFamily, pointsToHalfPoints, lineSpacingToTwips, cssFontStackFromFamily } from "@/lib/userPrefs";
@@ -37,6 +41,8 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
   const [prompt, setPrompt] = useState<string>("");
   const [docSearch, setDocSearch] = useState<string>("");
   const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [result, setResult] = useState<string>("");
   const [progress, setProgress] = useState(0);
   const [currentChunk, setCurrentChunk] = useState(0);
@@ -579,23 +585,171 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
     return new Blob([zipped], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
   };
 
-  const handleSave = async () => {
-    if (!result || !selectedFolderId) return;
+  const handleSave = () => {
+    if (!result || !selectedFolderId) {
+      toast({
+        title: 'Erro ao salvar',
+        description: 'Nenhum documento gerado ou pasta não selecionada',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Abrir diálogo de escolha
+    setShowSaveDialog(true);
+  };
+
+  const saveToSupabase = async () => {
     try {
+      setSaving(true);
+      setShowSaveDialog(false);
+
       const folder = (folders as any[]).find((f) => f.id === selectedFolderId);
-      if (!folder) return;
+      if (!folder) {
+        toast({
+          title: 'Erro ao salvar',
+          description: 'Pasta não encontrada',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const blob = await buildDocxBlob();
       const today = new Date().toISOString().slice(0,10);
       const clientName = folder.name || 'Cliente';
       const display = `${modeLabel || 'Documento'} - ${clientName} - ${today}.docx`;
       const storageName = safeFileName(`${modeLabel || 'documento'}-gerado`, 'docx');
+
       const saved = await DocumentFolderService.saveGeneratedDocxToFolder(folder, blob, storageName, display);
       const allDocIds = [saved.id, ...selectedDocIds];
       await FactStoreService.saveSynthesisFact(result, allDocIds);
+
+      toast({
+        title: 'Documento salvo na plataforma!',
+        description: `${display} foi salvo com sucesso`,
+      });
+
+      onOpenChange(false);
+      setResult('');
+      setActive(null);
+      setSelectedDocIds([]);
+      setPrompt('');
     } catch (e) {
-      console.error(e);
+      console.error('Error saving to Supabase:', e);
+      toast({
+        title: 'Erro ao salvar documento',
+        description: e instanceof Error ? e.message : 'Erro ao salvar na plataforma',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
     }
   };
+
+  const saveToGoogleDrive = async () => {
+    try {
+      setSaving(true);
+      setShowSaveDialog(false);
+
+      const isConnected = googleDriveService.isAuthenticated();
+      if (!isConnected) {
+        await googleDriveService.authenticate();
+      }
+
+      const folder = (folders as any[]).find((f) => f.id === selectedFolderId);
+      const blob = await buildDocxBlob();
+      const today = new Date().toISOString().slice(0,10);
+      const clientName = folder?.name || 'Cliente';
+      const display = `${modeLabel || 'Documento'} - ${clientName} - ${today}.docx`;
+
+      const file = new File([blob], display, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+
+      await googleDriveService.uploadFile(file);
+
+      toast({
+        title: 'Documento salvo no Google Drive!',
+        description: `${display} foi salvo com sucesso`,
+      });
+
+      onOpenChange(false);
+      setResult('');
+      setActive(null);
+      setSelectedDocIds([]);
+      setPrompt('');
+    } catch (e) {
+      console.error('Error saving to Google Drive:', e);
+      toast({
+        title: 'Erro ao salvar no Google Drive',
+        description: e instanceof Error ? e.message : 'Erro ao salvar no Drive',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveToBoth = async () => {
+    try {
+      setSaving(true);
+      setShowSaveDialog(false);
+
+      const folder = (folders as any[]).find((f) => f.id === selectedFolderId);
+      if (!folder) {
+        toast({
+          title: 'Erro ao salvar',
+          description: 'Pasta não encontrada',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const blob = await buildDocxBlob();
+      const today = new Date().toISOString().slice(0,10);
+      const clientName = folder.name || 'Cliente';
+      const display = `${modeLabel || 'Documento'} - ${clientName} - ${today}.docx`;
+      const storageName = safeFileName(`${modeLabel || 'documento'}-gerado`, 'docx');
+
+      // Salvar no Supabase
+      const saved = await DocumentFolderService.saveGeneratedDocxToFolder(folder, blob, storageName, display);
+      const allDocIds = [saved.id, ...selectedDocIds];
+      await FactStoreService.saveSynthesisFact(result, allDocIds);
+
+      // Salvar no Google Drive
+      const isConnected = googleDriveService.isAuthenticated();
+      if (!isConnected) {
+        await googleDriveService.authenticate();
+      }
+
+      const file = new File([blob], display, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+
+      await googleDriveService.uploadFile(file);
+
+      toast({
+        title: 'Documento salvo em ambos!',
+        description: `${display} foi salvo na plataforma e no Google Drive`,
+      });
+
+      onOpenChange(false);
+      setResult('');
+      setActive(null);
+      setSelectedDocIds([]);
+      setPrompt('');
+    } catch (e) {
+      console.error('Error saving to both:', e);
+      toast({
+        title: 'Erro ao salvar documento',
+        description: e instanceof Error ? e.message : 'Erro ao salvar',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const Card = ({
     icon: Icon,
@@ -666,8 +820,17 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
               <Button variant="outline" onClick={() => { navigator.clipboard.writeText(result); }}>Copiar</Button>
               <Button variant="outline" onClick={downloadDocx}>DOCX</Button>
               <Button variant="outline" onClick={downloadPdf}>PDF</Button>
-              <Button onClick={handleSave}>Salvar</Button>
-              <Button onClick={() => onOpenChange(false)}>Fechar</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar'
+                )}
+              </Button>
+              <Button onClick={() => onOpenChange(false)} disabled={saving}>Fechar</Button>
             </div>
           </div>
         ) : (
@@ -821,6 +984,80 @@ export function GenerateModal({ open, onOpenChange }: GenerateModalProps) {
           </div>
         )}
       </DialogContent>
+
+      {/* Save Destination Dialog */}
+      <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <AlertDialogContent className="rounded-3xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl">Onde deseja salvar?</AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Escolha onde você quer salvar o documento gerado
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="grid gap-3 py-4">
+            <Button
+              onClick={saveToSupabase}
+              disabled={saving}
+              className="h-16 justify-start rounded-2xl text-left"
+              variant="outline"
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
+                  <HardDrive className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold">Apenas na Plataforma</div>
+                  <div className="text-xs text-muted-foreground">Salvar no AdvFlow</div>
+                </div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={saveToGoogleDrive}
+              disabled={saving}
+              className="h-16 justify-start rounded-2xl text-left"
+              variant="outline"
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/10">
+                  <Cloud className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold">Apenas no Google Drive</div>
+                  <div className="text-xs text-muted-foreground">Salvar apenas na nuvem</div>
+                </div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={saveToBoth}
+              disabled={saving}
+              className="h-16 justify-start rounded-2xl text-left"
+              variant="outline"
+            >
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-green-500/10">
+                  <div className="flex gap-1">
+                    <HardDrive className="w-4 h-4 text-green-600" />
+                    <Cloud className="w-4 h-4 text-green-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold">Ambos</div>
+                  <div className="text-xs text-muted-foreground">Plataforma + Google Drive</div>
+                </div>
+              </div>
+            </Button>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-2xl" disabled={saving}>
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

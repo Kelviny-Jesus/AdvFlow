@@ -23,7 +23,9 @@ import {
   Folder,
   Loader2,
   Wand2,
-  FolderOpen
+  FolderOpen,
+  HardDrive,
+  Cloud
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -34,12 +36,26 @@ import { useFoldersReal } from "@/hooks/useFoldersReal";
 import { useSmartUploadReal } from "@/hooks/useSmartUploadReal";
 import { useNavigate } from "react-router-dom";
 import { GenerateModal } from "@/components/GenerateModal";
+import { GoogleDriveImportModal } from "@/components/GoogleDriveImportModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { googleDriveService } from "@/services/googleDriveService";
 
 const Uploads = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [panel, setPanel] = useState<'context' | 'docs'>('context');
   const navigate = useNavigate();
   const [openGenerate, setOpenGenerate] = useState(false);
+  const [showUploadSourceDialog, setShowUploadSourceDialog] = useState(false);
+  const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false);
   
   // Real Supabase data hooks
   const { data: folders = [], isLoading: foldersLoading, error: foldersError } = useFoldersReal();
@@ -96,6 +112,50 @@ const Uploads = () => {
     
     console.log('Upload destination:', destination); // Debug log
     addUploadFiles(newFiles, destination);
+  };
+
+  const handleChooseLocalFiles = () => {
+    setShowUploadSourceDialog(false);
+    setTimeout(() => {
+      document.getElementById('file-input')?.click();
+    }, 100);
+  };
+
+  const handleChooseGoogleDrive = async () => {
+    setShowUploadSourceDialog(false);
+    
+    const isConnected = await googleDriveService.isAuthenticated();
+    
+    if (!isConnected) {
+      toast({
+        title: "Google Drive não conectado",
+        description: "Conecte sua conta do Google Drive nas Configurações primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setShowGoogleDriveModal(true);
+  };
+
+  const handleGoogleDriveImport = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    try {
+      addFiles(files);
+
+      toast({
+        title: "Arquivos importados",
+        description: `${files.length} arquivo(s) importados do Google Drive com sucesso!`,
+      });
+    } catch (error) {
+      console.error('Error importing from Google Drive:', error);
+      toast({
+        title: "Erro ao importar",
+        description: error instanceof Error ? error.message : "Erro ao processar arquivos do Google Drive",
+        variant: "destructive",
+      });
+    }
   };
 
   const removeFile = (id: string) => {
@@ -387,7 +447,7 @@ const Uploads = () => {
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
-                      onClick={() => document.getElementById('file-input')?.click()}
+                      onClick={() => setShowUploadSourceDialog(true)}
                     >
                       <motion.div
                         animate={{ scale: isDragging ? 1.05 : 1 }}
@@ -546,6 +606,59 @@ const Uploads = () => {
               </div>
           </main>
           <GenerateModal open={openGenerate} onOpenChange={setOpenGenerate} />
+
+          {/* Upload Source Selection Dialog */}
+          <AlertDialog open={showUploadSourceDialog} onOpenChange={setShowUploadSourceDialog}>
+            <AlertDialogContent className="rounded-3xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-2xl">Escolha a origem dos arquivos</AlertDialogTitle>
+                <AlertDialogDescription className="text-base">
+                  De onde você deseja importar os arquivos?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              
+              <div className="grid gap-3 py-4">
+                <Button
+                  onClick={handleChooseLocalFiles}
+                  variant="outline"
+                  className="h-20 justify-start gap-4 rounded-2xl border-2 hover:border-primary hover:bg-primary/5"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <HardDrive className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-base">Repositório Local</div>
+                    <div className="text-sm text-muted-foreground">Arquivos do seu computador</div>
+                  </div>
+                </Button>
+
+                <Button
+                  onClick={handleChooseGoogleDrive}
+                  variant="outline"
+                  className="h-20 justify-start gap-4 rounded-2xl border-2 hover:border-primary hover:bg-primary/5"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Cloud className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-base">Google Drive</div>
+                    <div className="text-sm text-muted-foreground">Importar do Drive</div>
+                  </div>
+                </Button>
+              </div>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Google Drive Import Modal */}
+          <GoogleDriveImportModal
+            open={showGoogleDriveModal}
+            onOpenChange={setShowGoogleDriveModal}
+            onFilesImported={handleGoogleDriveImport}
+          />
         </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>

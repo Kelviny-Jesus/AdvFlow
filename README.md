@@ -12,14 +12,15 @@ Sistema de gestão de documentos jurídicos com IA: extração OCR (Google Visio
 
 ### 🤖 Inteligência Artificial
 - Extração automática de dados (Google Vision OCR → PDF pesquisável derivado)
-- Renomeação inteligente com OpenAI GPT-4o-mini
+- Renomeação inteligente com OpenAI GPT-5
 - Numeração sequencial por cliente
 - Geração de documentos com prompt customizável e sugestão em XML (EN)
 
 ### 🔄 Integrações
 - Supabase (PostgreSQL + Storage + Auth)
-- Google Cloud Vision + Storage (OCR)
+- Google Cloud Vision + Storage (OCR) + Google Drive
 - OpenAI (renomeação/geração)
+
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -33,7 +34,7 @@ Sistema de gestão de documentos jurídicos com IA: extração OCR (Google Visio
 - Supabase (RLS habilitado)
 
 ### IA e Processamento
-- OpenAI GPT‑4o‑mini para renomeação/narrativas
+- OpenAI GPT‑5 para renomeação/narrativas
 - Vision OCR (imagens síncrono; PDFs assíncrono via GCS)
 
 ## 📋 Pré‑requisitos
@@ -65,6 +66,8 @@ pnpm i
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 VITE_OPENAI_API_KEY=...
+VITE_GOOGLE_DRIVE_CLIENT_ID=...
+VITE_GOOGLE_DRIVE_API_KEY=...
 ```
 
 2) Backend OCR (`docflow/.env`)
@@ -81,30 +84,6 @@ PORT=3000
 2. Crie um novo projeto
 3. Copie a URL e chave anônima para o `.env.local`
 
-#### 4.2 Executar Migrações
-Execute os arquivos SQL na pasta `supabase/migrations/` na ordem:
-
-```sql
--- 1. Tabelas principais
--- 2. Relacionamentos
--- 3. Triggers e funções
--- 4. Políticas RLS
--- 5. Configuração final
-```
-
-#### 4.3 Configurar Storage
-```sql
--- Criar bucket 'documents'
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('documents', 'documents', true);
-
--- Políticas de acesso
-CREATE POLICY "documents_public_read" ON storage.objects
-FOR SELECT USING (bucket_id = 'documents');
-
-CREATE POLICY "documents_authenticated_upload" ON storage.objects
-FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.role() = 'authenticated');
-```
 
 ### 5. Executar (dev)
 
@@ -153,7 +132,7 @@ O sistema estará em `http://localhost:8080` (proxy `/api` → `:3000`).
 
 ### OpenAI - Modelos e Prompts
 
-O sistema usa **GPT-4o-mini** para:
+O sistema usa **GPT-5** para:
 - **Renomeação de documentos** com classificação específica
 - **Geração de narrativas** em português brasileiro
 - **Numeração sequencial** por cliente
@@ -170,16 +149,6 @@ O sistema implementa Row Level Security:
 - **Documentos** protegidos por usuário
 - **Storage** com políticas de upload/leitura
 
-## 🐛 Solução de Problemas
-
-### Erro: "Bucket not found"
-```sql
--- Verificar se bucket existe
-SELECT * FROM storage.buckets WHERE id = 'documents';
-
--- Recriar se necessário
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('documents', 'documents', true);
 ```
 
 ### Erro: "Invalid PDF structure"

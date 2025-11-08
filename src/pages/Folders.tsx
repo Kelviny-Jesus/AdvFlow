@@ -398,7 +398,7 @@ const Folders = () => {
 
   if (error) {
     return (
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <SidebarProvider>
           <div className="min-h-screen flex w-full bg-background">
             <AppSidebar />
@@ -428,7 +428,7 @@ const Folders = () => {
   }
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-background">

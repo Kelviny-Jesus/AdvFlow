@@ -56,8 +56,8 @@ export function AppSidebar() {
             transition={{ duration: 0.3 }}
           >
             <NavLink to="/" aria-label="Início" className="rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/50">
-              <div className="rounded-2xl overflow-hidden shadow-md cursor-pointer bg-transparent w-56 h-14 flex items-center justify-center">
-                <img src={logoSrc} alt="AdvFlow" className="w-full h-full object-contain scale-[1.99]" draggable={false} />
+              <div className="rounded-2xl overflow-hidden cursor-pointer bg-transparent w-32 h-22 flex items-center justify-center">
+                <img src={logoSrc} alt="AdvFlow" className="w-full h-full object-contain" draggable={false} />
               </div>
             </NavLink>
           </motion.div>

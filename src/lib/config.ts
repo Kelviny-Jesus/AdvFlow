@@ -170,7 +170,10 @@ export const appConfig = {
       enabled: false,
       clientId: import.meta.env.VITE_GOOGLE_DRIVE_CLIENT_ID,
       apiKey: import.meta.env.VITE_GOOGLE_DRIVE_API_KEY,
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      scopes: [
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://www.googleapis.com/auth/drive.file',
+      ],
     },
     openai: {
       enabled: false,

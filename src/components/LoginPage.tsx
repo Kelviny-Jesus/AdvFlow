@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Mail, Lock, FileText } from 'lucide-react';
+import { Loader2, Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 
 const LoginPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,7 +18,18 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user } = useAuth();
+  const navigate = useNavigate();
+  const { resolvedTheme, theme } = useTheme();
+  const isDark = (resolvedTheme || theme) === 'dark';
+  const logoSrc = isDark ? '/logo-dark.png' : '/logo.png';
+
+  // Redirecionar se já estiver logado
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +41,8 @@ const LoginPage = () => {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) throw error;
+        // Após login bem-sucedido, redirecionar
+        navigate('/', { replace: true });
       } else {
         const { error } = await signUp(email, password);
         if (error) throw error;
@@ -54,16 +69,13 @@ const LoginPage = () => {
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               transition={{ duration: 0.3, delay: 0.2 }}
-              className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center"
+              className="mx-auto w-48 h-20 flex items-center justify-center"
             >
-              <FileText className="w-8 h-8 text-white" />
+              <img src={logoSrc} alt="AdvFlow" className="w-full h-full object-contain" draggable={false} />
             </motion.div>
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-900">
-                DocFlow-AI
-              </CardTitle>
               <CardDescription className="text-gray-600 mt-2">
-                Sistema de Gestão de Documentos Jurídicos
+                Sistema de Gestão de Documentos Jurídicos com IA
               </CardDescription>
             </div>
           </CardHeader>
