@@ -1,28 +1,28 @@
-# AdvFlow (antigo DocFlow-AI)
+# AdvFlow
 
 Sistema de gestão de documentos jurídicos com IA: extração OCR (Google Vision), renomeação por IA e geração de documentos (Síntese/Procuração/Contratos/Petições). Mantém o arquivo original no preview do usuário e cria um PDF pesquisável derivado para a extração.
 
-## 🚀 Funcionalidades Principais
+## Funcionalidades Principais
 
-### 📁 Gestão de Documentos
+### Gestão de Documentos
 - Upload inteligente (arquivo original mantido no preview)
 - Organização hierárquica de pastas (Clientes, Casos, Subpastas)
 - Visualização integrada (PDF, imagens, DOCX, áudio, vídeo)
 - Navegação com breadcrumbs
 
-### 🤖 Inteligência Artificial
+### Inteligência Artificial
 - Extração automática de dados (Google Vision OCR → PDF pesquisável derivado)
 - Renomeação inteligente com OpenAI GPT-5
 - Numeração sequencial por cliente
 - Geração de documentos com prompt customizável e sugestão em XML (EN)
 
-### 🔄 Integrações
+### Integrações
 - Supabase (PostgreSQL + Storage + Auth)
 - Google Cloud Vision + Storage (OCR) + Google Drive
 - OpenAI (renomeação/geração)
 
 
-## 🛠️ Tecnologias Utilizadas
+## Tecnologias Utilizadas
 
 ### Frontend
 - React 18 + TypeScript, Vite, Tailwind, Shadcn/UI, React Query, Framer Motion
@@ -37,13 +37,13 @@ Sistema de gestão de documentos jurídicos com IA: extração OCR (Google Visio
 - OpenAI GPT‑5 para renomeação/narrativas
 - Vision OCR (imagens síncrono; PDFs assíncrono via GCS)
 
-## 📋 Pré‑requisitos
+## Pré‑requisitos
 
 - Node.js 18+ e pnpm 8+
 - Conta Supabase (bucket `documents`)
 - Projeto GCP com Vision API habilitada e bucket GCS
 
-## 🚀 Instalação e Configuração
+## Instalação e Configuração
 
 ### 1. Clone o Repositório
 
@@ -97,7 +97,7 @@ pnpm dev:api    # :3000
 
 O sistema estará em `http://localhost:8080` (proxy `/api` → `:3000`).
 
-## 📖 Guia de Uso
+## Guia de Uso
 
 ### 1. Upload de Documentos
 
@@ -128,7 +128,7 @@ O sistema estará em `http://localhost:8080` (proxy `/api` → `:3000`).
 4. Use “Melhore seu prompt” (gera XML em inglês)
 5. Gere e salve
 
-## 🔧 Configurações Avançadas
+## Configurações Avançadas
 
 ### OpenAI - Modelos e Prompts
 
@@ -166,7 +166,7 @@ O sistema implementa Row Level Security:
 - Teste o webhook manualmente
 - Verifique logs de extração no console
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 docflow/
@@ -185,7 +185,7 @@ docflow/
 └── public/                # Arquivos estáticos
 ```
 
-## 🔄 Fluxo de Processamento
+## Fluxo de Processamento
 
 1. Upload (arquivo original salvo)
 2. OCR (gera PDF pesquisável derivado e usa na extração)
@@ -193,7 +193,7 @@ docflow/
 4. Organização em pastas
 5. Geração de documentos
 
-## 📊 Logs e Monitoramento
+## Logs e Monitoramento
 
 O sistema gera logs detalhados:
 - **Console do navegador** para debug
@@ -201,7 +201,7 @@ O sistema gera logs detalhados:
 - **Supabase logs** para produção
 - **Performance monitoring** integrado
 
-## 🚀 Deploy
+## Deploy
 
 ### Desenvolvimento
 ```bash
@@ -213,25 +213,3 @@ pnpm dev:full
 pnpm build
 pnpm preview
 ```
-
-### Deploy no Supabase
-1. Configure variáveis de ambiente
-2. Execute migrações
-3. Configure políticas RLS
-4. Deploy do frontend
-
-## 📝 Licença
-
-Este projeto é privado e proprietário.
-
-## 🤝 Suporte
-
-Para suporte técnico ou dúvidas:
-1. Verifique os logs do console
-2. Confirme configurações do `.env.local`
-3. Teste integrações individualmente
-4. Consulte a documentação das APIs
-
----
-
-**AdvFlow** — Gestão de documentos jurídicos com IA 🚀
