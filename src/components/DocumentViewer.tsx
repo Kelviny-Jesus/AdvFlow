@@ -21,7 +21,9 @@ import {
   Pencil,
   Check,
   X,
-  Trash
+  Trash,
+  Music,
+  Video
 } from "lucide-react";
 import type { FileItem } from "@/types";
 import { formatFileSize } from "@/utils/fileUtils";
@@ -72,6 +74,16 @@ export function DocumentViewer({ document, children, siblingDocuments, initialIn
       case 'jpeg':
       case 'png':
         return <File className="w-5 h-5 text-purple-500" />;
+      case 'audio':
+      case 'mp3':
+      case 'ogg':
+      case 'wav':
+        return <Music className="w-5 h-5 text-orange-500" />;
+      case 'video':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+        return <Video className="w-5 h-5 text-pink-500" />;
       default:
         return <File className="w-5 h-5 text-gray-500" />;
     }
@@ -265,6 +277,73 @@ export function DocumentViewer({ document, children, siblingDocuments, initialIn
             onLoad={() => setIsLoading(false)}
             onLoadStart={() => setIsLoading(true)}
           />
+        </div>
+      );
+    }
+
+    // Para áudios, mostrar player HTML5
+    if (currentDoc.type === 'audio' || ['mp3', 'ogg', 'wav', 'opus', 'm4a', 'aac'].includes(currentDoc.type)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full bg-muted rounded-lg p-8">
+          <div className="mb-8 p-6 bg-background rounded-full shadow-lg">
+            <Music className="w-16 h-16 text-orange-500" />
+          </div>
+          <p className="text-lg font-medium mb-2 text-center">{currentDoc.name}</p>
+          <p className="text-muted-foreground mb-6 text-sm">
+            Tipo: {currentDoc.mimeType} • Tamanho: {formatFileSize(currentDoc.size)}
+          </p>
+          <div className="w-full max-w-md">
+            <audio 
+              controls 
+              className="w-full"
+              preload="metadata"
+              onLoadStart={() => setIsLoading(true)}
+              onLoadedData={() => setIsLoading(false)}
+            >
+              <source src={signedUrl || currentDoc.webViewLink || currentDoc.downloadLink} type={currentDoc.mimeType} />
+              Seu navegador não suporta o elemento de áudio.
+            </audio>
+          </div>
+          {isLoading && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Carregando áudio...
+            </div>
+          )}
+          <div className="mt-6">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleDownload}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Download do Áudio
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Para vídeos, mostrar player HTML5
+    if (currentDoc.type === 'video' || ['mp4', 'avi', 'mov', 'webm'].includes(currentDoc.type)) {
+      return (
+        <div className="relative h-full bg-black rounded-lg overflow-hidden flex items-center justify-center">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          )}
+          <video 
+            controls 
+            className="max-w-full max-h-full"
+            preload="metadata"
+            onLoadStart={() => setIsLoading(true)}
+            onLoadedData={() => setIsLoading(false)}
+          >
+            <source src={signedUrl || currentDoc.webViewLink || currentDoc.downloadLink} type={currentDoc.mimeType} />
+            Seu navegador não suporta o elemento de vídeo.
+          </video>
         </div>
       );
     }

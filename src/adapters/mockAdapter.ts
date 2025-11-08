@@ -529,7 +529,7 @@ class MockPetitionAdapter implements PetitionAdapter {
     const newFact: Fact = {
       ...fact,
       id: `fact-${Date.now()}`,
-      type: fact.type as "contratual" | "processual" | "probatório" | "comunicação",
+      type: fact.type as "contratual" | "processual" | "probatório",
     };
     
     logger.info('Mock: Fact added to petition', { petitionId, factId: newFact.id }, 'MockAdapter');

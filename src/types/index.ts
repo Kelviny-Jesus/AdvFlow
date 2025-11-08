@@ -95,7 +95,7 @@ export interface Petition {
 
 export interface Fact {
   id: string;
-  type: 'contratual' | 'processual' | 'probatório' | 'comunicação';
+  type: 'contratual' | 'processual' | 'probatório';
   text: string;
   documentRefs?: string[];
   tags?: string[];

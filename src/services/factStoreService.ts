@@ -11,7 +11,7 @@ export class FactStoreService {
         .from('facts')
         .insert({
           petition_id: null,
-          type: 'comunicação',
+          type: 'processual',
           text,
           user_id: user.user.id,
         })

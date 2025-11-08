@@ -853,6 +853,8 @@ export class DocumentFolderService {
         documentId: document.id,
         fileName: document.name,
         extractedData,
+        fileType: document.type,
+        mimeType: document.mimeType,
         clientName,
         caseReference,
         lastDocument

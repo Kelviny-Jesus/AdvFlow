@@ -197,7 +197,7 @@ export class PetitionService {
    * Adicionar fato à Fatos
    */
   static async addFactToPetition(petitionId: string, factData: {
-    type: "contratual" | "processual" | "probatório" | "comunicação";
+    type: "contratual" | "processual" | "probatório";
     text: string;
     documentRefs?: string[];
     tags?: string[];
@@ -309,7 +309,7 @@ export class PetitionService {
   private static mapFactRowToFact(row: FactRow, documentRefs?: string[]): Fact {
     return {
       id: row.id,
-      type: row.type as "contratual" | "processual" | "probatório" | "comunicação",
+      type: row.type as "contratual" | "processual" | "probatório",
       text: row.text,
       documentRefs,
       tags: row.tags || undefined,

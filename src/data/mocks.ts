@@ -432,7 +432,7 @@ Local, data.
 _____________________
 Advogado(a)
 OAB/XX nº XXXXX`,
-    factCategories: ["contratual", "processual", "probatório", "comunicação"],
+    factCategories: ["contratual", "processual", "probatório"],
     autoExtractFacts: true,
   },
   classification: {

@@ -177,8 +177,8 @@ export const UpdatePetitionSchema = CreatePetitionSchema.partial().omit({
 // Schema para Fato
 export const FactSchema = z.object({
   id: UuidSchema.optional(),
-  type: z.enum(['contratual', 'processual', 'probatório', 'comunicação'], {
-    errorMap: () => ({ message: 'Tipo deve ser: contratual, processual, probatório ou comunicação' })
+  type: z.enum(['contratual', 'processual', 'probatório'], {
+    errorMap: () => ({ message: 'Tipo deve ser: contratual, processual ou probatório' })
   }),
   text: z.string()
     .min(10, 'Texto do fato deve ter pelo menos 10 caracteres')

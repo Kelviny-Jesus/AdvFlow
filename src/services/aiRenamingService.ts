@@ -5,6 +5,8 @@ interface RenamingRequest {
   documentId: string;
   fileName: string;
   extractedData: string;
+  fileType?: 'pdf' | 'docx' | 'image' | 'audio' | 'video' | 'zip' | 'other';
+  mimeType?: string;
   clientName?: string;
   caseReference?: string;
   lastDocument?: {
@@ -99,14 +101,41 @@ class AIRenamingService {
       console.log('Usage:', data.usage);
       console.log('Completion tokens details:', data.usage?.completion_tokens_details);
 
-      const suggestedName = data.choices?.[0]?.message?.content?.trim();
+      // Verificar se há erro na resposta
+      if (data.error) {
+        console.error('OpenAI retornou erro:', data.error);
+        throw new AppError(`OpenAI error: ${data.error.message || 'Unknown error'}`, 500);
+      }
+
+      // Verificar se há choices
+      if (!data.choices || data.choices.length === 0) {
+        console.error('OpenAI não retornou choices');
+        console.log('Resposta completa:', data);
+        throw new AppError('OpenAI response missing choices', 500);
+      }
+
+      const choice = data.choices[0];
+      const suggestedName = choice?.message?.content?.trim();
 
       console.log('Nome sugerido pela IA:', suggestedName);
+      console.log('Finish reason:', choice?.finish_reason);
 
       if (!suggestedName) {
         console.log('IA não retornou nome sugerido');
-        console.log('Finish reason:', data.choices?.[0]?.finish_reason);
-        console.log('Message content:', data.choices?.[0]?.message?.content);
+        console.log('Finish reason:', choice?.finish_reason);
+        console.log('Message:', choice?.message);
+        console.log('Refusal:', choice?.message?.refusal);
+        
+        // Se foi cortado por limite de tokens
+        if (choice?.finish_reason === 'length') {
+          throw new AppError('OpenAI response truncated - content too long', 500);
+        }
+        
+        // Se houve recusa de conteúdo
+        if (choice?.message?.refusal) {
+          throw new AppError(`OpenAI refused: ${choice.message.refusal}`, 500);
+        }
+        
         throw new AppError('No response from OpenAI', 500);
       }
 
@@ -146,6 +175,9 @@ class AIRenamingService {
   private buildPrompt(request: RenamingRequest): string {
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     
+    // Obter descrição do tipo de arquivo
+    const fileTypeDescription = this.getFileTypeDescription(request.fileType, request.mimeType);
+    
     // Construir informação do último documento se disponível
     let lastDocumentInfo = '';
     if (request.lastDocument) {
@@ -170,6 +202,7 @@ DOCUMENTO PARA ANÁLISE E RENOMEAÇÃO:
 
 **Informações do Documento:**
 - Nome atual: ${request.fileName}
+- Tipo de arquivo: ${fileTypeDescription}
 - Cliente: ${request.clientName || 'Não especificado'}
 - Referência do caso: ${request.caseReference || 'Não especificado'}
 - Data de processamento: ${currentDate}
@@ -311,7 +344,35 @@ COMPORTAMENTO:
 - Mantenha confidencialidade e padrões profissionais jurídicos
 - Se não conseguir identificar informações, use valores padrão apropriados
 
+IMPORTANTE SOBRE TIPOS DE ARQUIVO:
+- Se o tipo de arquivo for ÁUDIO (audio/*, .ogg, .mp3, etc.): o conteúdo extraído é uma TRANSCRIÇÃO de áudio
+  → Use AUDIO_GRAVACAO independentemente do conteúdo da transcrição
+  → NÃO use FOTO_EVIDENCIA, IMAGEM ou outros tipos visuais para áudios
+- Se o tipo for VÍDEO: use VIDEO_EVIDENCIA
+- Se o tipo for IMAGEM/PDF: o conteúdo foi extraído via OCR, analise para identificar o tipo específico (RG, CPF, CONTRATO, etc.)
+- SEMPRE respeite o tipo de arquivo indicado acima nas "Informações do Documento"
+
 IMPORTANTE: Sua resposta deve ser APENAS o nome do documento no formato especificado, sem explicações, observações ou texto adicional.`;
+  }
+
+  /**
+   * Obter descrição legível do tipo de arquivo
+   */
+  private getFileTypeDescription(fileType?: string, mimeType?: string): string {
+    if (!fileType && !mimeType) return 'Tipo não identificado';
+    
+    const typeMap: Record<string, string> = {
+      'audio': '🎵 ÁUDIO (gravação de áudio, transcrição de fala)',
+      'video': '🎬 VÍDEO (gravação de vídeo)',
+      'image': '🖼️ IMAGEM (foto, digitalização, screenshot)',
+      'pdf': '📄 PDF (documento escaneado ou digital)',
+      'docx': '📝 DOCUMENTO WORD',
+      'zip': '📦 ARQUIVO COMPACTADO',
+      'other': '📎 OUTRO TIPO DE ARQUIVO'
+    };
+    
+    const description = typeMap[fileType || 'other'] || 'Tipo desconhecido';
+    return mimeType ? `${description} - MIME: ${mimeType}` : description;
   }
 
   /**
